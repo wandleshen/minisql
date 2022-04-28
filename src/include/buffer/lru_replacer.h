@@ -2,6 +2,7 @@
 #define MINISQL_LRU_REPLACER_H
 
 #include <list>
+#include <map>
 #include <mutex>
 #include <unordered_set>
 #include <vector>
@@ -37,6 +38,9 @@ public:
 
 private:
   // add your own private member variables here
+ mutex lock_;
+ list<frame_id_t> lru_list_;
+ map<frame_id_t, list<frame_id_t>::iterator> list_map_;
 };
 
 #endif  // MINISQL_LRU_REPLACER_H

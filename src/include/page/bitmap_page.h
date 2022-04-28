@@ -30,6 +30,8 @@ public:
    */
   bool IsPageFree(uint32_t page_offset) const;
 
+  uint32_t get_page_allocated() const { return page_allocated_; }
+
 private:
   /**
    * check a bit(byte_index, bit_index) in bytes is free(value 0).
