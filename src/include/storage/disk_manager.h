@@ -91,7 +91,7 @@ private:
   /**
    * Map logical page id to physical page id
    */
-  page_id_t MapPageId(page_id_t logical_page_id);
+  static page_id_t MapPageId(page_id_t logical_page_id);
 
 private:
   // stream to write db file
