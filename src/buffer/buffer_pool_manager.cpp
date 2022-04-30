@@ -111,7 +111,10 @@ bool BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty) {
   if (is_dirty)
     FlushPage(page_id);
   replacer_->Unpin(page_table_[page_id]);
-  p->pin_count_ = 0;
+  if (p->pin_count_ > 0)
+    p->pin_count_--;
+  else
+    p->pin_count_ = 0;
   return true;
 }
 

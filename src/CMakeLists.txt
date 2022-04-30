@@ -4,7 +4,7 @@ FILE(GLOB_RECURSE MINISQL_SOURCE ${PROJECT_SOURCE_DIR}/src/*/*.cpp
         ${PROJECT_SOURCE_DIR}/src/*/*.c
         ${PROJECT_SOURCE_DIR}/src/*/*/*.c
         )
-ADD_LIBRARY(minisql_shared SHARED ${MINISQL_SOURCE} buffer/clock_replacer.cpp include/buffer/clock_replacer.h)
+ADD_LIBRARY(minisql_shared SHARED ${MINISQL_SOURCE})
 TARGET_LINK_LIBRARIES(minisql_shared glog)
 
 ADD_EXECUTABLE(main main.cpp)
