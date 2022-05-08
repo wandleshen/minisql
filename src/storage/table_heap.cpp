@@ -49,9 +49,30 @@ bool TableHeap::GetTuple(Row *row, Transaction *txn) {
 }
 
 TableIterator TableHeap::Begin(Transaction *txn) {
-  return TableIterator();
-}
+  //得到第一页
+  TablePage first = *(reinterpret_cast<TablePage *>(buffer_pool_manager_->FetchPage(first_page_id_)));
+  //建立一个指向行的指针
+  RowId* first_id = new RowId;
+  //直到遇见1才停
+  //bool GetFirstTupleRid(RowId *first_rid);
+  while (1) 
+  {
+    if (first.GetFirstTupleRid(first_id)) break; /*找到了第一个*/
+    if (first.GetNextPageId() == INVALID_PAGE_ID) /*已经是最后一页了，并且没有找到第一个元组*/
+    {
+      delete first_id;  /*释放空间*/
+      return TableIterator(nullptr, buffer_pool_manager_);  /*返回null*/
+    }
+    //更新page
+    first = reinterpret_cast<TablePage*>(buffer_pool_manager_->FetchPage(first.GetNextPageId()));
+  }
+  //构建迭代器
+  TableIterator ite(first_id, buffer_pool_manager_);
+  //释放空间
+  delete first_id;
+  //返回迭代器
+  return ite;}
 
 TableIterator TableHeap::End() {
-  return TableIterator();
-}
+  //flag: 行指针为空
+  return TableIterator(nullptr, buffer_pool_manager_);}
