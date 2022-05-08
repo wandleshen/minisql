@@ -14,7 +14,7 @@ public:
   // you may define your own constructor based on your member variables
   explicit TableIterator();
   
-  explicit TableIterator(const Row* r, const TableHeap *bf);
+  explicit TableIterator(const Row* r, const TableHeap *th);
   
   TableIterator(const TableIterator &other);
 
