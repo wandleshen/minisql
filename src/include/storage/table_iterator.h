@@ -14,11 +14,10 @@ public:
   // you may define your own constructor based on your member variables
   explicit TableIterator();
   
-  explicit TableIterator(const Row* r, TableHeap *bf);
+  explicit TableIterator(const Row* r, const TableHeap *bf);
   
-  explicit TableIterator(const TableIterator &other);
+  TableIterator(const TableIterator &other);
 
-  TableIterator(const Row *r, const TableHeap *th);
   virtual ~TableIterator();
 
   inline bool operator==(const TableIterator &itr) const;
