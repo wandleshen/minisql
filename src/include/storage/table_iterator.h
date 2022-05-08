@@ -14,10 +14,11 @@ public:
   // you may define your own constructor based on your member variables
   explicit TableIterator();
   
-  explicit TableIterator(const Row* r, const BufferPoolManager * bf); 
+  explicit TableIterator(const Row* r, TableHeap *bf);
   
   explicit TableIterator(const TableIterator &other);
 
+  TableIterator(const Row *r, const TableHeap *th);
   virtual ~TableIterator();
 
   inline bool operator==(const TableIterator &itr) const;
@@ -35,7 +36,7 @@ public:
 private:
   // add your own private member variables here
   Row* ptr;   //指向当前这一行
-  BufferPoolManager *buffer_pool_manager_;  //指向当前的buffer_pool
+  TableHeap* table_heap_;  //指向当前的table_heap_
 };
 
 #endif //MINISQL_TABLE_ITERATOR_H
