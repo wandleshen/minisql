@@ -117,4 +117,29 @@ TEST(TupleTest, RowTest) {
   }
   ASSERT_TRUE(table_page.MarkDelete(row.GetRowId(), nullptr, nullptr, nullptr));
   table_page.ApplyDelete(row.GetRowId(), nullptr, nullptr);
+
+  for (int i = 0; i < 3; i++) {
+    void* mem = heap.Allocate(columns[i]->GetSerializedSize());
+    columns[i]->SerializeTo((char*)mem);
+    Column* col;
+    Column::DeserializeFrom((char*)mem, col, &heap);
+    ASSERT_EQ(columns[i]->GetName(), col->GetName());
+    ASSERT_EQ(columns[i]->GetType(), col->GetType());
+    ASSERT_EQ(columns[i]->GetLength(), col->GetLength());
+    ASSERT_EQ(columns[i]->IsNullable(), col->IsNullable());
+    ASSERT_EQ(columns[i]->GetTableInd(), col->GetTableInd());
+  }
+
+  void* mem = heap.Allocate(schema->GetSerializedSize());
+  schema->SerializeTo((char*)mem);
+  Schema* sch;
+  Schema::DeserializeFrom((char*)mem, sch, &heap);
+  ASSERT_EQ(schema->GetColumnCount(), sch->GetColumnCount());
+  for (uint32_t i = 0; i < schema->GetColumnCount(); i++) {
+    ASSERT_EQ(schema->GetColumn(i)->GetName(), sch->GetColumn(i)->GetName());
+    ASSERT_EQ(schema->GetColumn(i)->GetType(), sch->GetColumn(i)->GetType());
+    ASSERT_EQ(schema->GetColumn(i)->GetLength(), sch->GetColumn(i)->GetLength());
+    ASSERT_EQ(schema->GetColumn(i)->IsNullable(), sch->GetColumn(i)->IsNullable());
+    ASSERT_EQ(schema->GetColumn(i)->GetTableInd(), sch->GetColumn(i)->GetTableInd());
+  }
 }

@@ -19,7 +19,7 @@ uint32_t Row::SerializeTo(char *buf, Schema *schema) const {
       offset += field->GetSerializedSize();
     }
   }
-  return GetSerializedSize(schema);
+  return offset;
 }
 
 uint32_t Row::DeserializeFrom(char *buf, Schema *schema) {
@@ -38,7 +38,7 @@ uint32_t Row::DeserializeFrom(char *buf, Schema *schema) {
     fields_.emplace_back(field_tmp);
     offset += fields_.back()->GetSerializedSize();
   }
-  return GetSerializedSize(schema);
+  return offset;
 }
 
 uint32_t Row::GetSerializedSize(Schema *schema) const {

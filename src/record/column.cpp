@@ -28,15 +28,56 @@ Column::Column(const Column *other) : name_(other->name_), type_(other->type_), 
 
 uint32_t Column::SerializeTo(char *buf) const {
   // replace with your code here
-  return 0;
+  MACH_WRITE_UINT32(buf, COLUMN_MAGIC_NUM);
+  auto offset = sizeof(uint32_t);
+  std::string::size_type length = name_.length();
+  MACH_WRITE_TO(std::string::size_type, buf+offset, length);
+  offset += sizeof(std::string::size_type);
+  MACH_WRITE_STRING(buf+offset, name_);
+  offset += length;
+  MACH_WRITE_TO(TypeId, buf+offset, type_);
+  offset += sizeof(TypeId);
+  MACH_WRITE_UINT32(buf+offset, len_);
+  offset += sizeof(uint32_t);
+  MACH_WRITE_UINT32(buf+offset, table_ind_);
+  offset += sizeof(uint32_t);
+  MACH_WRITE_TO(bool, buf+offset, nullable_);
+  offset += sizeof(bool);
+  MACH_WRITE_TO(bool, buf+offset, unique_);
+  offset += sizeof(bool);
+  return offset;
 }
 
 uint32_t Column::GetSerializedSize() const {
   // replace with your code here
-  return 0;
+  return sizeof(uint32_t) + sizeof(std::string::size_type) + name_.length() + sizeof(TypeId) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(bool) + sizeof(bool);
 }
 
 uint32_t Column::DeserializeFrom(char *buf, Column *&column, MemHeap *heap) {
   // replace with your code here
-  return 0;
+  uint32_t magic_num = MACH_READ_UINT32(buf);
+  ASSERT(magic_num == COLUMN_MAGIC_NUM, "Wrong magic number.");
+  auto offset = sizeof(uint32_t);
+  std::string::size_type length = MACH_READ_FROM(std::string::size_type, buf+offset);
+  offset += sizeof(std::string::size_type);
+  std::string name;
+  for (std::string::size_type i = 0; i < length; i++)
+    name += buf[offset+i];
+  offset += length;
+  TypeId type = MACH_READ_FROM(TypeId, buf+offset);
+  offset += sizeof(TypeId);
+  uint32_t len = MACH_READ_UINT32(buf+offset);
+  offset += sizeof(uint32_t);
+  uint32_t table_ind = MACH_READ_UINT32(buf+offset);
+  offset += sizeof(uint32_t);
+  bool nullable = MACH_READ_FROM(bool, buf+offset);
+  offset += sizeof(bool);
+  bool unique = MACH_READ_FROM(bool, buf+offset);
+  offset += sizeof(bool);
+  void *mem = heap->Allocate(sizeof(Column));
+  if (type == TypeId::kTypeChar)
+    column = new (mem)Column(name, type, len, table_ind, nullable, unique);
+  else
+    column = new (mem)Column(name, type, table_ind, nullable, unique);
+  return offset;
 }
