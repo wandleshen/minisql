@@ -103,6 +103,8 @@ private:
           log_manager_(log_manager),
           lock_manager_(lock_manager) {
      buffer_pool_manager_->NewPage(first_page_id_);
+     auto page = reinterpret_cast<TablePage*>(buffer_pool_manager_->FetchPage(first_page_id_));
+     page->Init(first_page_id_, INVALID_PAGE_ID, log_manager, txn);
   };
 
   /**
