@@ -20,6 +20,7 @@ bool TableHeap::InsertTuple(Row &row, Transaction *txn) {
   if (!new_page)
     return false;
   new_page->Init(page_id, page->GetPageId(), log_manager_, txn);
+  page->SetNextPageId(new_page->GetPageId());
   return new_page->InsertTuple(row, schema_, txn, lock_manager_, log_manager_);
 }
 
@@ -109,7 +110,7 @@ TableIterator TableHeap::Begin(Transaction *txn) {
   //得到第一页
   TablePage* first = (reinterpret_cast<TablePage *>(buffer_pool_manager_->FetchPage(first_page_id_)));
   //建立一个指向行的指针
-  RowId* first_id = new RowId;
+  auto first_id = new RowId;
   //直到遇见1才停
   //bool GetFirstTupleRid(RowId *first_rid);
   while (true)

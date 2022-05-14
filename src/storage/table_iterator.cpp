@@ -9,6 +9,7 @@ TableIterator::TableIterator() {
 TableIterator::TableIterator(const Row* r, const TableHeap* th)
 {     
   if (r) ptr = new Row(*r); //非空则拷贝
+  else ptr = nullptr;
   if (th) table_heap_ = (TableHeap*)th;    //非空则拷贝 update: BufferPoolManager 没有拷贝构造函数
 }
 TableIterator::TableIterator(const TableIterator &other) {
@@ -17,14 +18,14 @@ TableIterator::TableIterator(const TableIterator &other) {
 }
 
 TableIterator::~TableIterator() {
-  delete ptr;   //非空则进行释放 update: delete nullptr 仍然是 valid 的
+  //delete ptr;   //非空则进行释放 update: delete nullptr 仍然是 valid 的
   ptr = nullptr;
   table_heap_ = nullptr;
 }
 
 bool TableIterator::operator==(const TableIterator &itr) const {
   //row指针都为空或者指向同一行
-  return ((ptr == itr.ptr || (!ptr && !itr.ptr) ) && table_heap_->buffer_pool_manager_ == itr.table_heap_->buffer_pool_manager_);}
+  return ((ptr == itr.ptr || (!ptr && !itr.ptr)) && table_heap_->buffer_pool_manager_ == itr.table_heap_->buffer_pool_manager_);}
 
 bool TableIterator::operator!=(const TableIterator &itr) const {
   return !(*this == itr);
@@ -50,7 +51,14 @@ TableIterator &TableIterator::operator++() {
 
   //return false 也就是说找不到下一个，此时指向最后一个元素的后一个元素
   if (!page->GetNextTupleRid(*now, next))
-  { 
+  {
+    if (page->GetNextPageId() == INVALID_PAGE_ID) /*已经是最后一页了*/
+    {
+      ptr = nullptr; /*说明到了末尾， 置为null*/
+      delete next;
+      delete now;
+      return *this;
+    }
     //找下一页
     page = reinterpret_cast<TablePage *>(table_heap_->buffer_pool_manager_->FetchPage(page->GetNextPageId()));
     
@@ -63,10 +71,12 @@ TableIterator &TableIterator::operator++() {
         delete now;
         return *this;
       }
+      page = reinterpret_cast<TablePage *>(table_heap_->buffer_pool_manager_->FetchPage(page->GetNextPageId()));
     }
   }
   //找到了下一个rowid ：*next
-  ptr->SetRowId(*next); //更新ptr的rowid
+  delete ptr;
+  ptr = new Row(*next); //更新ptr的rowid
   table_heap_->GetTuple(ptr, nullptr);
 
   delete next;

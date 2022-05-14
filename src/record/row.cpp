@@ -3,8 +3,9 @@
 using namespace std;
 uint32_t Row::SerializeTo(char *buf, Schema *schema) const {
   // replace with your code here
-  MACH_WRITE_TO(RowId, buf, rid_);
-  uint32_t offset = sizeof(RowId);
+//  MACH_WRITE_TO(RowId, buf, rid_);
+//  uint32_t offset = sizeof(RowId);
+  uint32_t offset = 0;
   vector<bool> bits;
   for (auto field : fields_) {
     bits.emplace_back() = field->IsNull();
@@ -24,8 +25,9 @@ uint32_t Row::SerializeTo(char *buf, Schema *schema) const {
 
 uint32_t Row::DeserializeFrom(char *buf, Schema *schema) {
   // replace with your code here
-  rid_ = MACH_READ_FROM(RowId, buf);
-  uint32_t offset = sizeof(RowId);
+//  rid_ = MACH_READ_FROM(RowId, buf);
+//  uint32_t offset = sizeof(RowId);
+  uint32_t offset = 0;
   vector<bool> bits;
   for (uint32_t i = 0; i < schema->GetColumnCount(); i++) {
     bits.emplace_back(MACH_READ_FROM(bool, buf + offset));
@@ -43,7 +45,8 @@ uint32_t Row::DeserializeFrom(char *buf, Schema *schema) {
 
 uint32_t Row::GetSerializedSize(Schema *schema) const {
   // replace with your code here
-  uint32_t size = sizeof(RowId);
+  //uint32_t size = sizeof(RowId);
+  uint32_t size = 0;
   for (auto field : fields_) {
     if (!field->IsNull())
       size += field->GetSerializedSize();

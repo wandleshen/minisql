@@ -46,11 +46,25 @@ TEST(TableHeapTest, TableHeapSampleTest) {
     Row row(RowId(row_kv.first));
     table_heap->GetTuple(&row, nullptr);
     ASSERT_EQ(schema.get()->GetColumnCount(), row.GetFields().size());
-    for (size_t j = 0; j < schema.get()->GetColumnCount(); j++) {
+    for (size_t j = 0; j < schema->GetColumnCount(); j++) {
       ASSERT_EQ(CmpBool::kTrue, row.GetField(j)->CompareEquals(row_kv.second->at(j)));
     }
     // free spaces
     delete row_kv.second;
   }
+
+  int count = 0;
+  for (auto iter = table_heap->Begin(nullptr); iter != table_heap->End(); ++iter) {
+    Row row(iter->GetRowId());
+    table_heap->GetTuple(&row, nullptr);
+    ASSERT_EQ(schema.get()->GetColumnCount(), row.GetFields().size());
+    ASSERT_EQ(schema.get()->GetColumnCount(), iter->GetFields().size());
+    for (size_t j = 0; j < schema->GetColumnCount(); j++) {
+      ASSERT_EQ(CmpBool::kTrue, row.GetField(j)->CompareEquals(*iter->GetField(j)));
+    }
+    count++;
+  }
+  ASSERT_EQ(row_nums, count);
+  remove(db_file_name.c_str());
 }
 
