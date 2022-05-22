@@ -46,6 +46,12 @@ TEST(BPlusTreeTests, SampleTest) {
     ASSERT_EQ(kv_map[i], ans[i]);
   }
   ASSERT_TRUE(tree.Check());
+  // Iterator
+  int count = 0;
+  for (auto iter = tree.Begin(); iter != tree.End(); ++iter) {
+    ASSERT_EQ((*iter).first, count);
+    count++;
+  }
   // Delete half keys
   for (int i = 0; i < n / 2; i++) {
     tree.Remove(delete_seq[i]);

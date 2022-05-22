@@ -72,7 +72,7 @@ ValueType B_PLUS_TREE_INTERNAL_PAGE_TYPE::Lookup(const KeyType &key, const KeyCo
   while (index < GetSize() && comparator(array_[index].first, key) <= 0) {
     index++;
   }
-  return array_[index].second;
+  return array_[index-1].second;
 }
 
 /*****************************************************************************
@@ -130,8 +130,8 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveHalfTo(BPlusTreeInternalPage *recipient
   if (page != nullptr) {
     page->WLatch();
     SetSize(GetSize() / 2);
-    recipient->SetSize(GetSize());
-    for (int i = 0; i < GetSize(); i++) {
+    recipient->SetSize(GetSize()+1);
+    for (int i = 0; i < GetSize()+1; i++) {
       auto child_page = buffer_pool_manager->FetchPage(array_[i + GetSize()].second);
       if (child_page != nullptr) {
         child_page->WLatch();
@@ -146,13 +146,15 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveHalfTo(BPlusTreeInternalPage *recipient
     page->WUnlatch();
     buffer_pool_manager->UnpinPage(GetPageId(), true);
   }
-  page = buffer_pool_manager->FetchPage(recipient->GetParentPageId());
-  if (page != nullptr) {
-    auto node = reinterpret_cast<BPlusTreeInternalPage *>(page->GetData());
-    node->SetSize(node->GetSize() + 1);
-    node->InsertNodeAfter(GetPageId(), recipient->array_[0].first, recipient->GetPageId());
-    buffer_pool_manager->UnpinPage(recipient->GetParentPageId(), true);
-  }
+//  if (recipient->GetParentPageId() != INVALID_PAGE_ID) {
+//    page = buffer_pool_manager->FetchPage(recipient->GetParentPageId());
+//    if (page != nullptr) {
+//      auto node = reinterpret_cast<BPlusTreeInternalPage *>(page->GetData());
+//      node->SetSize(node->GetSize() + 1);
+//      node->InsertNodeAfter(GetPageId(), recipient->array_[0].first, recipient->GetPageId());
+//      buffer_pool_manager->UnpinPage(recipient->GetParentPageId(), true);
+//    }
+//  }
 }
 
 /* Copy entries into me, starting from {items} and copy {size} entries.
@@ -232,7 +234,7 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveAllTo(BPlusTreeInternalPage *recipient,
   if (page != nullptr) {
     page->WLatch();
     auto size = recipient->GetSize();
-    recipient->SetSize(GetSize() + recipient->GetSize() + 1);
+    recipient->SetSize(GetSize() + recipient->GetSize());
     for (int i = 0; i < GetSize(); i++) {
       auto child_page = buffer_pool_manager->FetchPage(array_[i].second);
       child_page->WLatch();
@@ -249,15 +251,17 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveAllTo(BPlusTreeInternalPage *recipient,
     page->WUnlatch();
     buffer_pool_manager->UnpinPage(GetPageId(), true);
   }
-  page = buffer_pool_manager->FetchPage(recipient->GetParentPageId());
-  if (page != nullptr) {
-    page->WLatch();
-    auto node = reinterpret_cast<BPlusTreeInternalPage*>(page->GetData());
-    node->InsertNodeAfter(GetPageId(), recipient->array_[0].first, recipient->GetPageId());
-    node->Remove(ValueIndex(GetPageId()));
-    page->WUnlatch();
-    buffer_pool_manager->UnpinPage(recipient->GetParentPageId(), true);
-  }
+//  if (GetParentPageId() != INVALID_PAGE_ID) {
+//    page = buffer_pool_manager->FetchPage(recipient->GetParentPageId());
+//    if (page != nullptr) {
+//      page->WLatch();
+//      auto node = reinterpret_cast<BPlusTreeInternalPage *>(page->GetData());
+//      node->InsertNodeAfter(GetPageId(), recipient->array_[0].first, recipient->GetPageId());
+//      node->Remove(ValueIndex(GetPageId()));
+//      page->WUnlatch();
+//      buffer_pool_manager->UnpinPage(recipient->GetParentPageId(), true);
+//    }
+//  }
 }
 
 /*****************************************************************************
@@ -287,21 +291,23 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveFirstToEndOf(BPlusTreeInternalPage *rec
     page->WUnlatch();
     buffer_pool_manager->UnpinPage(GetPageId(), true);
   }
-  page = buffer_pool_manager->FetchPage(recipient->GetParentPageId());
-  if (page != nullptr) {
-    page->WLatch();
-    auto node = reinterpret_cast<BPlusTreeInternalPage*>(page->GetData());
-    node->SetKeyAt(node->ValueIndex(GetPageId()), array_[0].first);
-    page->WUnlatch();
-    buffer_pool_manager->UnpinPage(recipient->GetParentPageId(), true);
-  }
-  page = buffer_pool_manager->FetchPage(recipient->array_[recipient->GetSize() - 1].second);
-  if (page != nullptr) {
-    page->WLatch();
-    auto node = reinterpret_cast<BPlusTreeInternalPage*>(page->GetData());
-    node->SetParentPageId(recipient->GetPageId());
-    page->WUnlatch();
-    buffer_pool_manager->UnpinPage(recipient->array_[recipient->GetSize() - 1].second, true);
+  if (GetParentPageId() != INVALID_PAGE_ID) {
+    page = buffer_pool_manager->FetchPage(recipient->GetParentPageId());
+    if (page != nullptr) {
+      page->WLatch();
+      auto node = reinterpret_cast<BPlusTreeInternalPage *>(page->GetData());
+      node->SetKeyAt(node->ValueIndex(GetPageId()), array_[0].first);
+      page->WUnlatch();
+      buffer_pool_manager->UnpinPage(recipient->GetParentPageId(), true);
+    }
+    page = buffer_pool_manager->FetchPage(recipient->array_[recipient->GetSize() - 1].second);
+    if (page != nullptr) {
+      page->WLatch();
+      auto node = reinterpret_cast<BPlusTreeInternalPage *>(page->GetData());
+      node->SetParentPageId(recipient->GetPageId());
+      page->WUnlatch();
+      buffer_pool_manager->UnpinPage(recipient->array_[recipient->GetSize() - 1].second, true);
+    }
   }
 }
 
@@ -352,21 +358,23 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveLastToFrontOf(BPlusTreeInternalPage *re
     page->WUnlatch();
     buffer_pool_manager->UnpinPage(GetPageId(), true);
   }
-  page = buffer_pool_manager->FetchPage(recipient->GetParentPageId());
-  if (page != nullptr) {
-    page->WLatch();
-    auto node = reinterpret_cast<BPlusTreeInternalPage*>(page->GetData());
-    node->SetKeyAt(node->ValueIndex(recipient->GetPageId()), recipient->array_[0].first);
-    page->WUnlatch();
-    buffer_pool_manager->UnpinPage(recipient->GetParentPageId(), true);
-  }
-  page = buffer_pool_manager->FetchPage(recipient->array_[0].second);
-  if (page != nullptr) {
-    page->WLatch();
-    auto node = reinterpret_cast<BPlusTreeInternalPage*>(page->GetData());
-    node->SetParentPageId(recipient->GetPageId());
-    page->WUnlatch();
-    buffer_pool_manager->UnpinPage(recipient->array_[0].second, true);
+  if (GetParentPageId() != INVALID_PAGE_ID) {
+    page = buffer_pool_manager->FetchPage(recipient->GetParentPageId());
+    if (page != nullptr) {
+      page->WLatch();
+      auto node = reinterpret_cast<BPlusTreeInternalPage *>(page->GetData());
+      node->SetKeyAt(node->ValueIndex(recipient->GetPageId()), recipient->array_[0].first);
+      page->WUnlatch();
+      buffer_pool_manager->UnpinPage(recipient->GetParentPageId(), true);
+    }
+    page = buffer_pool_manager->FetchPage(recipient->array_[0].second);
+    if (page != nullptr) {
+      page->WLatch();
+      auto node = reinterpret_cast<BPlusTreeInternalPage *>(page->GetData());
+      node->SetParentPageId(recipient->GetPageId());
+      page->WUnlatch();
+      buffer_pool_manager->UnpinPage(recipient->array_[0].second, true);
+    }
   }
 }
 
