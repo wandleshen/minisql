@@ -129,9 +129,12 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveHalfTo(BPlusTreeInternalPage *recipient
   auto page = buffer_pool_manager->FetchPage(GetPageId());
   if (page != nullptr) {
     page->WLatch();
+    if (GetSize() % 2)
+      recipient->SetSize(GetSize()/2+1);
+    else
+      recipient->SetSize(GetSize()/2);
     SetSize(GetSize() / 2);
-    recipient->SetSize(GetSize()+1);
-    for (int i = 0; i < GetSize()+1; i++) {
+    for (int i = 0; i < recipient->GetSize(); i++) {
       auto child_page = buffer_pool_manager->FetchPage(array_[i + GetSize()].second);
       if (child_page != nullptr) {
         child_page->WLatch();

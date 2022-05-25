@@ -13,7 +13,9 @@ BPLUSTREE_TYPE::BPlusTree(index_id_t index_id, BufferPoolManager *buffer_pool_ma
           comparator_(comparator),
           leaf_max_size_(leaf_max_size),
           internal_max_size_(internal_max_size) {
-
+  auto header_page = reinterpret_cast<IndexRootsPage *>(buffer_pool_manager_->FetchPage(INDEX_ROOTS_PAGE_ID)->GetData());
+  header_page->GetRootId(index_id_, &root_page_id_);
+  buffer_pool_manager_->UnpinPage(INDEX_ROOTS_PAGE_ID, false);
 }
 
 INDEX_TEMPLATE_ARGUMENTS
@@ -532,14 +534,14 @@ Page *BPLUSTREE_TYPE::FindLeafPage(const KeyType &key, bool leftMost) {
  */
 INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_TYPE::UpdateRootPageId(int insert_record) {
-  IndexRootsPage *header_page = reinterpret_cast<IndexRootsPage *>(buffer_pool_manager_->FetchPage(0));
+  IndexRootsPage *header_page = reinterpret_cast<IndexRootsPage *>(buffer_pool_manager_->FetchPage(INDEX_ROOTS_PAGE_ID)->GetData());
   if (insert_record)
     // 1:新建一个root
     header_page->Insert(index_id_, root_page_id_);
   else
     //0:更新某个root
     header_page->Update(index_id_, root_page_id_);
-  buffer_pool_manager_->UnpinPage(0, true);
+  buffer_pool_manager_->UnpinPage(INDEX_ROOTS_PAGE_ID, true);
 }
 
 /**
