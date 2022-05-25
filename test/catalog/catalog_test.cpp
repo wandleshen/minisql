@@ -58,6 +58,17 @@ TEST(CatalogTest, CatalogTableTest) {
   ASSERT_EQ(table_info, table_info_02);
   auto *table_heap = table_info->GetTableHeap();
   ASSERT_TRUE(table_heap != nullptr);
+  for (int i = 0; i < 10; i++) {
+    std::vector<Field> fields{
+        Field(TypeId::kTypeInt, i),
+        Field(TypeId::kTypeChar, const_cast<char *>("minisql"), 7, true),
+        Field(TypeId::kTypeFloat, (float)i * 0.1f)
+    };
+    Row row(fields);
+    RowId rid(table_info->GetRootPageId(), i);
+    row.SetRowId(rid);
+    ASSERT_EQ(true, table_heap->InsertTuple(row, nullptr));
+  }
   delete db_01;
   /** Stage 2: Testing catalog loading */
   auto db_02 = new DBStorageEngine(db_file_name, false);
@@ -65,6 +76,22 @@ TEST(CatalogTest, CatalogTableTest) {
   TableInfo *table_info_03 = nullptr;
   ASSERT_EQ(DB_TABLE_NOT_EXIST, catalog_02->GetTable("table-2", table_info_03));
   ASSERT_EQ(DB_SUCCESS, catalog_02->GetTable("table-1", table_info_03));
+  auto *table_heap_02 = table_info_03->GetTableHeap();
+  for (int i = 0; i < 10; i++) {
+    std::vector<Field> fields{
+        Field(TypeId::kTypeInt, i),
+        Field(TypeId::kTypeChar, const_cast<char *>("minisql"), 7, true),
+        Field(TypeId::kTypeFloat, (float)i * 0.1f)
+    };
+    Row row(fields);
+    RowId rid(table_info_03->GetRootPageId(), i);
+    auto row_02 = new Row(rid);
+    table_heap_02->GetTuple(row_02, nullptr);
+    for (int j = 0; j < 3; j++)
+      ASSERT_EQ(CmpBool::kTrue, row.GetField(j)->CompareEquals(*row_02->GetField(j)));
+  }
+  ASSERT_EQ(DB_SUCCESS, catalog_02->DropTable("table-1"));
+  ASSERT_EQ(DB_TABLE_NOT_EXIST, catalog_02->GetTable("table-1", table_info_03));
   delete db_02;
 }
 
@@ -134,5 +161,7 @@ TEST(CatalogTest, CatalogIndexTest) {
     ASSERT_EQ(DB_SUCCESS, index_info_02->GetIndex()->ScanKey(row, ret_02, &txn));
     ASSERT_EQ(rid.Get(), ret_02[i].Get());
   }
+  ASSERT_EQ(DB_SUCCESS, catalog_02->DropIndex("table-1", "index-1"));
+  ASSERT_EQ(DB_INDEX_NOT_FOUND, catalog_02->GetIndex("table-1", "index-1", index_info_02));
   delete db_02;
 }
