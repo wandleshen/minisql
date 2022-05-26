@@ -20,6 +20,31 @@ BPLUSTREE_TYPE::BPlusTree(index_id_t index_id, BufferPoolManager *buffer_pool_ma
 
 INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_TYPE::Destroy() {
+  auto header_page = reinterpret_cast<IndexRootsPage *>(buffer_pool_manager_->FetchPage(INDEX_ROOTS_PAGE_ID)->GetData());
+  header_page->Delete(index_id_);
+  buffer_pool_manager_->UnpinPage(INDEX_ROOTS_PAGE_ID, true);
+  if (root_page_id_ == INVALID_PAGE_ID)
+    return;
+  // dfs
+  list<page_id_t> stack;
+  stack.emplace_back(root_page_id_);
+  while (!stack.empty()) {
+    auto page = *stack.begin();
+    stack.pop_front();
+    auto node = reinterpret_cast<InternalPage*>(buffer_pool_manager_
+                    ->FetchPage(page)->GetData());
+    if (node->IsLeafPage()) {
+      buffer_pool_manager_->UnpinPage(page, false);
+      buffer_pool_manager_->DeletePage(page);
+      continue;
+    }
+    for (int i = 0; i < node->GetSize(); ++i) {
+      if (node->ValueAt(i) != INVALID_PAGE_ID)
+        stack.emplace_back(node->ValueAt(i));
+    }
+    buffer_pool_manager_->UnpinPage(page, false);
+    buffer_pool_manager_->DeletePage(page);
+  }
 }
 
 /*
@@ -482,8 +507,8 @@ INDEXITERATOR_TYPE BPLUSTREE_TYPE::Begin() {
  */
 INDEX_TEMPLATE_ARGUMENTS
 INDEXITERATOR_TYPE BPLUSTREE_TYPE::Begin(const KeyType &key) {
-  auto leaf = reinterpret_cast<LeafPage *>(FindLeafPage(key, true));
-  return INDEXITERATOR_TYPE(leaf, buffer_pool_manager_, 0);
+  auto leaf = reinterpret_cast<LeafPage *>(FindLeafPage(key, false));
+  return INDEXITERATOR_TYPE(leaf, buffer_pool_manager_, leaf->KeyIndex(key, comparator_));
 }
 
 /*
@@ -515,6 +540,10 @@ Page *BPLUSTREE_TYPE::FindLeafPage(const KeyType &key, bool leftMost) {
   {
     buffer_pool_manager_->UnpinPage(page->GetPageId(), false);
     page = reinterpret_cast<InternalPage *>(buffer_pool_manager_->FetchPage(next_page_id)->GetData());
+    // 警钟长鸣！不要随便混用 LeafPage 和 InternalPage 的函数！
+    if (page->IsLeafPage()) {
+      break;
+    }
     if(leftMost)
       next_page_id = page->ValueAt(0); //find the left most leaf page
     else

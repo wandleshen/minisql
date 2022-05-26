@@ -105,7 +105,11 @@ int B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType &key, const ValueType &valu
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveHalfTo(BPlusTreeLeafPage *recipient) {
   recipient->SetNextPageId(next_page_id_);
-  int size = GetSize() / 2;
+  int size;
+  if (GetSize() % 2)
+    size = GetSize() / 2;
+  else
+   size = GetSize() / 2 + 1;
   for (int i = size+recipient->GetSize(); i >= 0; i--) {
     if (i > size)
       recipient->array_[i] = recipient->array_[i - size];

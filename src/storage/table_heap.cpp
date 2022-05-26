@@ -21,7 +21,9 @@ bool TableHeap::InsertTuple(Row &row, Transaction *txn) {
     return false;
   new_page->Init(page_id, page->GetPageId(), log_manager_, txn);
   page->SetNextPageId(new_page->GetPageId());
-  return new_page->InsertTuple(row, schema_, txn, lock_manager_, log_manager_);
+  bool ans = new_page->InsertTuple(row, schema_, txn, lock_manager_, log_manager_);
+  buffer_pool_manager_->UnpinPage(new_page->GetPageId(), true);
+  return ans;
 }
 
 bool TableHeap::MarkDelete(const RowId &rid, Transaction *txn) {
@@ -39,7 +41,7 @@ bool TableHeap::MarkDelete(const RowId &rid, Transaction *txn) {
   return true;
 }
 
-bool TableHeap::UpdateTuple(const Row &row, const RowId &rid, Transaction *txn) {
+bool TableHeap::UpdateTuple(Row &row, const RowId &rid, Transaction *txn) {
   auto page = reinterpret_cast<TablePage *>(buffer_pool_manager_->FetchPage(rid.GetPageId()));
   Row* old_row = new Row(rid);
   if (!GetTuple(old_row, txn))
@@ -51,8 +53,7 @@ bool TableHeap::UpdateTuple(const Row &row, const RowId &rid, Transaction *txn) 
   buffer_pool_manager_->UnpinPage(page->GetPageId(), true);
   // update for extra requests
   if (!flag && err_code == 1) {
-    Row* new_row = (Row*)&row;
-    flag = InsertTuple(*new_row, txn);
+    flag = InsertTuple(row, txn);
     if (flag) {
       MarkDelete(rid, txn);
       ApplyDelete(rid, txn);

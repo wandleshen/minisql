@@ -61,9 +61,10 @@ CatalogManager::CatalogManager(BufferPoolManager *buffer_pool_manager, LockManag
           log_manager_(log_manager), heap_(new SimpleMemHeap()) {
   if (init) {
     catalog_meta_ = CatalogMeta::NewInstance(heap_);
-  }
-  else {
-    catalog_meta_ = CatalogMeta::DeserializeFrom(buffer_pool_manager_->FetchPage(CATALOG_META_PAGE_ID)->GetData(), heap_);
+  } else {
+    catalog_meta_ = CatalogMeta::DeserializeFrom(buffer_pool_manager_->
+                                                 FetchPage(CATALOG_META_PAGE_ID)->GetData(),
+                                                 heap_);
     auto table_pages = catalog_meta_->GetTableMetaPages();
     for (auto &page : *table_pages) {
       auto table_page = buffer_pool_manager_->FetchPage(page.second);
@@ -71,7 +72,10 @@ CatalogManager::CatalogManager(BufferPoolManager *buffer_pool_manager, LockManag
       auto heap = new SimpleMemHeap();
       TableMetadata* table_meta = nullptr;
       TableMetadata::DeserializeFrom(table_page->GetData(), table_meta, heap);
-      auto table_heap = TableHeap::Create(buffer_pool_manager_, (int)table_meta->GetFirstPageId(), table_meta->GetSchema(), log_manager_, lock_manager_, heap);
+      auto table_heap = TableHeap::Create(buffer_pool_manager_,
+                                          (int)table_meta->GetFirstPageId(),
+                                          table_meta->GetSchema(),
+                                          log_manager_, lock_manager_, heap);
       auto table_info = TableInfo::Create(heap);
       table_info->Init(table_meta, table_heap);
       table_names_.insert(std::make_pair(table_meta->GetTableName(), page.first));
@@ -87,7 +91,9 @@ CatalogManager::CatalogManager(BufferPoolManager *buffer_pool_manager, LockManag
       IndexMetadata* index_meta = nullptr;
       IndexMetadata::DeserializeFrom(index_page->GetData(), index_meta, heap);
       auto index_info = IndexInfo::Create(heap);
-      index_info->Init(index_meta, tables_[index_meta->GetTableId()], buffer_pool_manager_);
+      index_info->Init(index_meta,
+                       tables_[index_meta->GetTableId()],
+                       buffer_pool_manager_);
       auto table_name = tables_[index_meta->GetTableId()]->GetTableName();
       index_names_[table_name].insert(std::make_pair(index_meta->GetIndexName(), page.first));
       indexes_.insert(std::make_pair(page.first, index_info));
@@ -111,7 +117,7 @@ dberr_t CatalogManager::CreateTable(const string &table_name, TableSchema *schem
   auto page = buffer_pool_manager_->NewPage(page_id);
   auto heap = new SimpleMemHeap();
   auto table_heap = TableHeap::Create(buffer_pool_manager_, schema, nullptr, log_manager_, lock_manager_, heap);
-  auto table_meta = TableMetadata::Create(next_table_id_, table_name, table_heap->GetFirstPageId(), schema, heap);
+  auto table_meta = TableMetadata::Create(catalog_meta_->GetNextTableId(), table_name, table_heap->GetFirstPageId(), schema, heap);
   table_info = TableInfo::Create(heap);
   table_info->Init(table_meta, table_heap);
   table_names_.insert(std::make_pair(table_name, table_meta->GetTableId()));
@@ -157,6 +163,8 @@ dberr_t CatalogManager::CreateIndex(const std::string &table_name, const string 
   for (auto &key : index_keys) {
     for (uint32_t i = 0; i < columns.size(); i++) {
       if (columns[i]->GetName() == key) {
+        if (!columns[i]->IsUnique())
+          return DB_FAILED;
         key_map.emplace_back(i);
       }
     }
@@ -165,7 +173,7 @@ dberr_t CatalogManager::CreateIndex(const std::string &table_name, const string 
     }
     size++;
   }
-  auto index_meta = IndexMetadata::Create(next_index_id_, index_name, table_info->GetTableId(), key_map, heap);
+  auto index_meta = IndexMetadata::Create(catalog_meta_->GetNextIndexId(), index_name, table_info->GetTableId(), key_map, heap);
   index_info = IndexInfo::Create(heap);
   index_info->Init(index_meta, table_info, buffer_pool_manager_);
   index_names_[table_name].insert(std::make_pair(index_name, index_meta->GetIndexId()));
@@ -177,8 +185,15 @@ dberr_t CatalogManager::CreateIndex(const std::string &table_name, const string 
   index_meta->SerializeTo(page->GetData());
   page->WUnlatch();
   buffer_pool_manager_->UnpinPage(page_id, true);
-  for (auto iter = table_info->GetTableHeap()->Begin(nullptr); iter != table_info->GetTableHeap()->End(); ++iter) {
-    index_info->GetIndex()->InsertEntry(*iter, (*iter).GetRowId(), nullptr);
+
+  vector<Field> fields;
+  for (auto iter = table_info->GetTableHeap()->Begin(nullptr);
+       iter != table_info->GetTableHeap()->End(); ++iter) {
+    for (auto& i : key_map) {
+      fields.emplace_back(*iter->GetField(i));
+    }
+    index_info->GetIndex()->InsertEntry(Row(fields), (*iter).GetRowId(), nullptr);
+    fields.clear();
   }
   return DB_SUCCESS;
 }
@@ -209,6 +224,16 @@ dberr_t CatalogManager::DropTable(const string &table_name) {
     return DB_TABLE_NOT_EXIST;
   }
   auto table_info = tables_[table_names_[table_name]];
+  for (auto &index_id : index_names_[table_name]) {
+    DropIndex(table_name, index_id.first);
+  }
+  auto page_id = catalog_meta_->GetTableMetaPages()->at(table_info->GetTableId());
+  buffer_pool_manager_->DeletePage(page_id);
+  auto table_heap = table_info->GetTableHeap();
+  for (auto iter = table_heap->Begin(nullptr); iter != table_heap->End(); ++iter) {
+    auto page = iter->GetRowId().GetPageId();
+    buffer_pool_manager_->DeletePage(page);
+  }
   delete table_info;
   tables_.erase(table_names_[table_name]);
   catalog_meta_->GetTableMetaPages()->erase(table_names_[table_name]);
@@ -223,10 +248,13 @@ dberr_t CatalogManager::DropIndex(const string &table_name, const string &index_
   }
   auto index_id = index_names_.at(table_name).at(index_name);
   auto index_info = indexes_[index_id];
+  auto page_id = catalog_meta_->GetIndexMetaPages()->at(index_id);
+  index_info->GetIndex()->Destroy();
   delete index_info;
   indexes_.erase(index_id);
   catalog_meta_->GetIndexMetaPages()->erase(index_id);
   index_names_.at(table_name).erase(index_name);
+  buffer_pool_manager_->DeletePage(page_id);
   return DB_SUCCESS;
 }
 

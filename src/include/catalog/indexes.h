@@ -81,6 +81,8 @@ public:
 
   inline TableInfo *GetTableInfo() const { return table_info_; }
 
+  inline const std::vector<uint32_t> &GetKeyMapping() const { return meta_data_->key_map_; }
+
 private:
   explicit IndexInfo() : meta_data_{nullptr}, index_{nullptr}, table_info_{nullptr},
                          key_schema_{nullptr}, heap_(new SimpleMemHeap()) {}
