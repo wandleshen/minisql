@@ -1,28 +1,45 @@
 #include "storage/table_heap.h"
 
 bool TableHeap::InsertTuple(Row &row, Transaction *txn) {
-  auto page = reinterpret_cast<TablePage *>(buffer_pool_manager_->FetchPage(first_page_id_));
-  while (true) {
+//  auto page = reinterpret_cast<TablePage *>(buffer_pool_manager_->FetchPage(first_page_id_));
+//  while (true) {
+//    if (page->InsertTuple(row, schema_, txn, lock_manager_, log_manager_)) {
+//      buffer_pool_manager_->UnpinPage(page->GetPageId(), true);
+//      page->WUnlatch();
+//      return true;
+//    }
+//    buffer_pool_manager_->UnpinPage(page->GetPageId(), false);
+//    page->WUnlatch();
+//    if (page->GetNextPageId() == INVALID_PAGE_ID)
+//      break;
+//    page = reinterpret_cast<TablePage *>(buffer_pool_manager_->FetchPage(page->GetNextPageId()));
+//    page->WLatch();
+//  }
+  if (!max_free_page_.empty()) {
+    auto top_page = max_free_page_.top();
+    auto page = reinterpret_cast<TablePage *>(buffer_pool_manager_->FetchPage(top_page.page_id_));
     if (page->InsertTuple(row, schema_, txn, lock_manager_, log_manager_)) {
       buffer_pool_manager_->UnpinPage(page->GetPageId(), true);
       page->WUnlatch();
+      top_page.size_ -= 1;
+      max_free_page_.pop();
+      if (top_page.size_ > 0)
+        max_free_page_.push(top_page);
       return true;
     }
-    buffer_pool_manager_->UnpinPage(page->GetPageId(), false);
-    page->WUnlatch();
-    if (page->GetNextPageId() == INVALID_PAGE_ID)
-      break;
-    page = reinterpret_cast<TablePage *>(buffer_pool_manager_->FetchPage(page->GetNextPageId()));
-    page->WLatch();
-  }
+}
   page_id_t page_id;
   auto new_page = reinterpret_cast<TablePage *>(buffer_pool_manager_->NewPage(page_id));
   if (!new_page)
     return false;
-  new_page->Init(page_id, page->GetPageId(), log_manager_, txn);
+  new_page->Init(page_id, last_page_id_, log_manager_, txn);
+  auto page = reinterpret_cast<TablePage *>(buffer_pool_manager_->FetchPage(last_page_id_));
   page->SetNextPageId(new_page->GetPageId());
+  buffer_pool_manager_->UnpinPage(page->GetPageId(), true);
   bool ans = new_page->InsertTuple(row, schema_, txn, lock_manager_, log_manager_);
   buffer_pool_manager_->UnpinPage(new_page->GetPageId(), true);
+  max_free_page_.push(MaxHeapNode(page_id, PAGE_SIZE - 1));
+  last_page_id_ = page_id;
   return ans;
 }
 
@@ -72,6 +89,20 @@ void TableHeap::ApplyDelete(const RowId &rid, Transaction *txn) {
   page->ApplyDelete(rid, txn, log_manager_);
   page->WUnlatch();
   buffer_pool_manager_->UnpinPage(page->GetTablePageId(), true);
+  vector<MaxHeapNode> nodes;
+  while (!max_free_page_.empty()) {
+    auto top_page = max_free_page_.top();
+    nodes.push_back(top_page);
+    max_free_page_.pop();
+    if (top_page.page_id_ == rid.GetPageId()) {
+      top_page.size_ += 1;
+      max_free_page_.push(top_page);
+      break;
+    }
+  }
+  for (auto node : nodes) {
+    max_free_page_.push(node);
+  }
 }
 
 void TableHeap::RollbackDelete(const RowId &rid, Transaction *txn) {

@@ -59,12 +59,28 @@ dberr_t ExecuteEngine::ExecuteCreateDatabase(pSyntaxNode ast, ExecuteContext *co
   LOG(INFO) << "ExecuteCreateDatabase" << std::endl;
 #endif
   string db_name = ast->child_->val_;
+  ifstream in("databases.txt");
+  if (!in.is_open()) {
+    printf("Failed to open databases.txt.\n");
+    return DB_FAILED;
+  }
+  string line;
+  while (getline(in, line)) {
+    if (line.back() == '\r') {
+      line.pop_back();
+    }
+    if (dbs_.find(line) == dbs_.end())
+      dbs_[line] = new DBStorageEngine(line);
+  }
+  in.close();
   if (dbs_.find(db_name) != dbs_.end()) {
     printf("Database %s already exists.\n", db_name.c_str());
     return DB_FAILED;
   }
   clock_t start = clock();
   dbs_[db_name] = new DBStorageEngine(db_name);
+  ofstream out("databases.txt", ios::app);
+  out << db_name << endl;
   clock_t end = clock();
   printf("Database %s created in %lf s.\n", db_name.c_str(), (double)(end - start) / CLOCKS_PER_SEC);
   return DB_SUCCESS;
@@ -75,6 +91,20 @@ dberr_t ExecuteEngine::ExecuteDropDatabase(pSyntaxNode ast, ExecuteContext *cont
   LOG(INFO) << "ExecuteDropDatabase" << std::endl;
 #endif
   string db_name = ast->child_->val_;
+  ifstream in("databases.txt");
+  if (!in.is_open()) {
+    printf("Failed to open databases.txt.\n");
+    return DB_FAILED;
+  }
+  string line;
+  while (getline(in, line)) {
+    if (line.back() == '\r') {
+      line.pop_back();
+    }
+    if (dbs_.find(line) == dbs_.end())
+      dbs_[line] = new DBStorageEngine(line);
+  }
+  in.close();
   if (dbs_.find(db_name) == dbs_.end()) {
     printf("Database %s does not exist.\n", db_name.c_str());
     return DB_FAILED;
@@ -82,6 +112,10 @@ dberr_t ExecuteEngine::ExecuteDropDatabase(pSyntaxNode ast, ExecuteContext *cont
   clock_t start = clock();
   delete dbs_[db_name];
   dbs_.erase(db_name);
+  ofstream out("databases.txt");
+  for (auto & db : dbs_) {
+    out << db.first << endl;
+  }
   clock_t end = clock();
   printf("Database %s dropped in %lf s.\n", db_name.c_str(), (double)(end - start) / CLOCKS_PER_SEC);
   return DB_SUCCESS;
@@ -91,6 +125,20 @@ dberr_t ExecuteEngine::ExecuteShowDatabases(pSyntaxNode ast, ExecuteContext *con
 #ifdef ENABLE_EXECUTE_DEBUG
   LOG(INFO) << "ExecuteShowDatabases" << std::endl;
 #endif
+  ifstream in("databases.txt");
+  if (!in.is_open()) {
+    printf("Failed to open databases.txt.\n");
+    return DB_FAILED;
+  }
+  string line;
+  while (getline(in, line)) {
+    if (line.back() == '\r') {
+      line.pop_back();
+    }
+    if (dbs_.find(line) == dbs_.end())
+      dbs_[line] = new DBStorageEngine(line);
+  }
+  in.close();
   printf("┌─────────────┐\n");
   printf("│ Database(s) │\n");
   clock_t start = clock();
@@ -381,14 +429,16 @@ dberr_t ExecuteQuery(pSyntaxNode& condition, vector<RowId>& range, TableInfo* in
   auto column = info->GetSchema()->GetColumn(column_idx);
   vector<Field> key_value;
 
-
   if (condition->child_->next_->type_ != kNodeNull) {
+    char* value = (char*)malloc(column->GetLength()+1);
+    memset(value, 0, column->GetLength()+1);
+    strcpy(value, condition->child_->next_->val_);
     if (column->GetType() == kTypeInt)
-      key_value.emplace_back(Field(kTypeInt, stoi(condition->child_->next_->val_)));
+      key_value.emplace_back(Field(kTypeInt, stoi(value)));
     else if (column->GetType() == kTypeFloat)
-      key_value.emplace_back(Field(kTypeFloat, stof(condition->child_->next_->val_)));
+      key_value.emplace_back(Field(kTypeFloat, stof(value)));
     else if (column->GetType() == kTypeChar)
-      key_value.emplace_back(Field(kTypeChar, condition->child_->next_->val_, column->GetLength(), true));
+      key_value.emplace_back(Field(kTypeChar, value, column->GetLength(), true));
   } else {
     key_value.emplace_back(Field(column->GetType()));
   }
@@ -1164,6 +1214,7 @@ dberr_t ExecuteEngine::ExecuteExecfile(pSyntaxNode ast, ExecuteContext *context)
     if (cmd.back() == ';') {
       YY_BUFFER_STATE bp = yy_scan_string(cmd.c_str());
       yy_switch_to_buffer(bp);
+      MinisqlParserInit();
       yyparse();
       // parse result handle
       if (MinisqlParserGetError())
