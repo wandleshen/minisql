@@ -134,7 +134,7 @@ private:
         size--;
       }
       if (size > 0)
-        max_free_page_.push(MaxHeapNode(page->GetNextPageId(), size));
+        max_free_page_.push(MaxHeapNode(page->GetPageId(), size));
       buffer_pool_manager_->UnpinPage(page->GetPageId(), false);
       if (page->GetNextPageId() == INVALID_PAGE_ID)
         break;

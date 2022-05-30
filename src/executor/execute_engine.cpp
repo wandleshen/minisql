@@ -699,7 +699,7 @@ dberr_t ExecuteEngine::ExecuteSelect(pSyntaxNode ast, ExecuteContext *context) {
     }
     printf("──────────┐\n");
     for (auto& c : column_names) {
-      printf("│%-10s│", c.c_str());
+      printf("%-10s│", c.c_str());
     }
     printf("\n");
     printf("├");
@@ -835,16 +835,19 @@ dberr_t ExecuteEngine::ExecuteInsert(pSyntaxNode ast, ExecuteContext *context) {
 
   vector<Field> fields;
   for (uint32_t i = 0; i < schema->GetColumnCount(); i++) {
+    char* value = (char*)malloc(schema->GetColumn(i)->GetLength()+1);
+    memset(value, 0, schema->GetColumn(i)->GetLength()+1);
+    strcpy(value, row_values[i].c_str());
     if (types[i] == kNodeNull) {
       fields.emplace_back(Field(column[i]->GetType()));
     } else if (column[i]->GetType() == kTypeChar) {
-      fields.emplace_back(Field(kTypeChar, (char*)row_values[i].c_str(),
+      fields.emplace_back(Field(kTypeChar, value,
                                 column[i]->GetLength(),
                                 (column[i]->GetLength() != 0)));
     } else if (column[i]->GetType() == kTypeInt) {
-      fields.emplace_back(Field(kTypeInt, stoi(row_values[i])));
+      fields.emplace_back(Field(kTypeInt, stoi(value)));
     } else {
-      fields.emplace_back(Field(kTypeFloat, stof(row_values[i])));
+      fields.emplace_back(Field(kTypeFloat, stof(value)));
     }
   }
   Row r(fields);

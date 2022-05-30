@@ -106,7 +106,7 @@ void TableHeap::RecreateQueue() {
       size--;
     }
     if (size > 0)
-      new_queue.push(MaxHeapNode(page->GetNextPageId(), size));
+      new_queue.push(MaxHeapNode(page->GetPageId(), size));
     buffer_pool_manager_->UnpinPage(page->GetPageId(), false);
     if (page->GetNextPageId() == INVALID_PAGE_ID)
       break;
