@@ -90,19 +90,29 @@ void TableHeap::ApplyDelete(const RowId &rid, Transaction *txn) {
   page->WUnlatch();
   buffer_pool_manager_->UnpinPage(page->GetTablePageId(), true);
   vector<MaxHeapNode> nodes;
-  while (!max_free_page_.empty()) {
-    auto top_page = max_free_page_.top();
-    nodes.push_back(top_page);
-    max_free_page_.pop();
-    if (top_page.page_id_ == rid.GetPageId()) {
-      top_page.size_ += 1;
-      max_free_page_.push(top_page);
+}
+
+void TableHeap::RecreateQueue() {
+  priority_queue<MaxHeapNode> new_queue;
+  auto page = reinterpret_cast<TablePage*>(buffer_pool_manager_->FetchPage(first_page_id_));
+  while (true) {
+    auto size = PAGE_SIZE;
+    auto r_id = new RowId;
+    if (!page->GetFirstTupleRid(r_id)) {
+      buffer_pool_manager_->UnpinPage(page->GetPageId(), false);
       break;
     }
+    while (page->GetNextTupleRid(*r_id, r_id)) {
+      size--;
+    }
+    if (size > 0)
+      new_queue.push(MaxHeapNode(page->GetNextPageId(), size));
+    buffer_pool_manager_->UnpinPage(page->GetPageId(), false);
+    if (page->GetNextPageId() == INVALID_PAGE_ID)
+      break;
+    page = reinterpret_cast<TablePage*>(buffer_pool_manager_->FetchPage(page->GetNextPageId()));
   }
-  for (auto node : nodes) {
-    max_free_page_.push(node);
-  }
+  max_free_page_ = new_queue;
 }
 
 void TableHeap::RollbackDelete(const RowId &rid, Transaction *txn) {

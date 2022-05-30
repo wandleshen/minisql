@@ -116,6 +116,10 @@ dberr_t ExecuteEngine::ExecuteDropDatabase(pSyntaxNode ast, ExecuteContext *cont
   for (auto & db : dbs_) {
     out << db.first << endl;
   }
+  out.close();
+  if (current_db_ == db_name) {
+    current_db_ = "";
+  }
   clock_t end = clock();
   printf("Database %s dropped in %lf s.\n", db_name.c_str(), (double)(end - start) / CLOCKS_PER_SEC);
   return DB_SUCCESS;
@@ -996,6 +1000,7 @@ dberr_t ExecuteEngine::ExecuteDelete(pSyntaxNode ast, ExecuteContext *context) {
       table_info->GetTableHeap()->ApplyDelete(i, nullptr);
     }
   }
+  table_info->GetTableHeap()->RecreateQueue();
   clock_t end = clock();
   printf("%d rows deleted in %lf s.\n", row_count, (double)(end - start) / CLOCKS_PER_SEC);
   return DB_SUCCESS;

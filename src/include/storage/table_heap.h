@@ -93,6 +93,8 @@ public:
    */
   inline page_id_t GetFirstPageId() const { return first_page_id_; }
 
+  void RecreateQueue();
+
 private:
   /**
    * create table heap and initialize first page
@@ -121,17 +123,22 @@ private:
             log_manager_(log_manager),
             lock_manager_(lock_manager) {
     auto page = reinterpret_cast<TablePage*>(buffer_pool_manager_->FetchPage(first_page_id_));
-    while (page->GetNextPageId() != INVALID_PAGE_ID) {
+    while (true) {
       auto size = PAGE_SIZE;
-      max_free_page_.push(MaxHeapNode(page->GetNextPageId(), PAGE_SIZE));
-      page = reinterpret_cast<TablePage*>(buffer_pool_manager_->FetchPage(page->GetNextPageId()));
       auto r_id = new RowId;
-      page->GetFirstTupleRid(r_id);
+      if (!page->GetFirstTupleRid(r_id)) {
+        buffer_pool_manager_->UnpinPage(page->GetPageId(), false);
+        break;
+      }
       while (page->GetNextTupleRid(*r_id, r_id)) {
         size--;
       }
       if (size > 0)
         max_free_page_.push(MaxHeapNode(page->GetNextPageId(), size));
+      buffer_pool_manager_->UnpinPage(page->GetPageId(), false);
+      if (page->GetNextPageId() == INVALID_PAGE_ID)
+        break;
+      page = reinterpret_cast<TablePage*>(buffer_pool_manager_->FetchPage(page->GetNextPageId()));
     }
     last_page_id_ = page->GetPageId();
   }
