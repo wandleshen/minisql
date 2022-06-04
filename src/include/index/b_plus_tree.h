@@ -42,7 +42,7 @@ public:
   void Remove(const KeyType &key, Transaction *transaction = nullptr);
 
   // return the value associated with a given key
-  bool GetValue(const KeyType &key, std::vector<ValueType> &result, Transaction *transaction = nullptr);
+  bool GetValue(const KeyType &key, std::vector<ValueType> &result, LeafPage* leaf, int& index, Transaction *transaction = nullptr);
 
   INDEXITERATOR_TYPE Begin();
 
@@ -107,6 +107,7 @@ private:
   KeyComparator comparator_;
   int leaf_max_size_;
   int internal_max_size_;
+  int last_page_id_;
 };
 
 #endif  // MINISQL_B_PLUS_TREE_H

@@ -131,7 +131,7 @@ dberr_t CatalogManager::CreateTable(const string &table_name, TableSchema *schem
 }
 
 dberr_t CatalogManager::GetTable(const string &table_name, TableInfo *&table_info) {
-  if (table_names_.find(table_name) == table_names_.end()) {
+ if (table_names_.find(table_name) == table_names_.end()) {
     return DB_TABLE_NOT_EXIST;
   }
   table_info = tables_[table_names_[table_name]];

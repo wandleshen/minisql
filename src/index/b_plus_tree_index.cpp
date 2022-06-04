@@ -37,7 +37,8 @@ INDEX_TEMPLATE_ARGUMENTS
 dberr_t BPLUSTREE_INDEX_TYPE::ScanKey(const Row &key, vector<RowId> &result, Transaction *txn) {
   KeyType index_key;
   index_key.SerializeFromKey(key, key_schema_);
-  if (container_.GetValue(index_key, result, txn)) {
+  int index;
+  if (container_.GetValue(index_key, result, nullptr, index, txn)) {
     return DB_SUCCESS;
   }
   return DB_KEY_NOT_FOUND;

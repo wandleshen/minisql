@@ -698,6 +698,7 @@ dberr_t ExecuteEngine::ExecuteSelect(pSyntaxNode ast, ExecuteContext *context) {
       printf("──────────┬");
     }
     printf("──────────┐\n");
+    printf("│");
     for (auto& c : column_names) {
       printf("%-10s│", c.c_str());
     }
@@ -855,6 +856,11 @@ dberr_t ExecuteEngine::ExecuteInsert(pSyntaxNode ast, ExecuteContext *context) {
   vector<IndexInfo *> indexes;
   db->catalog_mgr_->GetTableIndexes(table_name, indexes);
 
+  if (!table_heap->InsertTuple(r, nullptr)) {
+    printf("Insert failed.\n");
+    return DB_FAILED;
+  }
+
   if (!unique_col.empty()) {
 #ifndef IDX_TEST
     // simper traverse
@@ -869,40 +875,35 @@ dberr_t ExecuteEngine::ExecuteInsert(pSyntaxNode ast, ExecuteContext *context) {
     }
 #else
     // index traverse
-    for (uint32_t i = 0; i < unique_col.size(); i++) {
+    for (auto & i : unique_col) {
       bool flag = false;
-      for (auto& index : indexes) {
-        if (index->GetIndexKeySchema()->GetColumn(0)->GetName() == unique_col[i] &&
+      for (auto &index : indexes) {
+        if (index->GetIndexKeySchema()->GetColumn(0)->GetName() == i &&
             index->GetIndexKeySchema()->GetColumns().size() == 1) {
-          vector<RowId> row_ids;
-          vector<Field> row_fields(1, *r.GetField(unique_col_idx[i]));
-          index->GetIndex()->ScanKey(Row(row_fields), row_ids, nullptr);
-          flag = true;
-          if (!row_ids.empty()) {
-            printf("Duplicate key for column %s.\n", unique_col[i].c_str());
+          auto key_map = index->GetKeyMapping();
+          vector<Field> index_fields;
+          for (auto &j : key_map) {
+            index_fields.emplace_back(*r.GetField(j));
+          }
+          Row tmp(index_fields);
+          tmp.SetRowId(r.GetRowId());
+          if (index->GetIndex()->InsertEntry(tmp, r.GetRowId(), nullptr) == DB_FAILED) {
+            printf("Duplicate key for column %s.\n", i.c_str());
+            table_heap->ApplyDelete(r.GetRowId(), nullptr);
             return DB_FAILED;
           }
+          flag = true;
         }
       }
       if (!flag) {
-        printf("Index for unique column %s not found.\n", unique_col[i].c_str());
+        printf("Index for unique column %s not found.\n", i.c_str());
+        table_heap->ApplyDelete(r.GetRowId(), nullptr);
         return DB_FAILED;
       }
     }
 #endif
   }
-  if (!table_heap->InsertTuple(r, nullptr)) {
-    printf("Insert failed.\n");
-    return DB_FAILED;
-  }
-  for (auto& index : indexes) {
-    auto key_map = index->GetKeyMapping();
-    vector<Field> index_fields;
-    for (auto& i : key_map) {
-      index_fields.emplace_back(*r.GetField(i));
-    }
-    index->GetIndex()->InsertEntry(Row(index_fields), r.GetRowId(), nullptr);
-  }
+
   clock_t end = clock();
   printf("1 row inserted in %lf s.\n", (double)(end - start) / CLOCKS_PER_SEC);
   return DB_SUCCESS;

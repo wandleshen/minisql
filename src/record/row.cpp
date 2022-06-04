@@ -30,14 +30,14 @@ uint32_t Row::DeserializeFrom(char *buf, Schema *schema) {
   uint32_t offset = 0;
   vector<bool> bits;
   for (uint32_t i = 0; i < schema->GetColumnCount(); i++) {
-    bits.emplace_back(MACH_READ_FROM(bool, buf + offset));
+    bits.push_back(MACH_READ_FROM(bool, buf + offset));
     offset += sizeof(bool);
   }
   for (unsigned long i = 0; i < bits.size(); i++) {
     void* tmp = heap_->Allocate(sizeof(Field));
     auto* field_tmp = new(tmp)Field(schema->GetColumn(i)->GetType());
     Field::DeserializeFrom(buf + offset, schema->GetColumn(i)->GetType(), &field_tmp, bits[i], heap_);
-    fields_.emplace_back(field_tmp);
+    fields_.push_back(field_tmp);
     offset += fields_.back()->GetSerializedSize();
   }
   return offset;

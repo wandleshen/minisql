@@ -49,9 +49,11 @@ public:
   const MappingType &GetItem(int index);
 
   // insert and delete methods
-  int Insert(const KeyType &key, const ValueType &value, const KeyComparator &comparator);
+  int Insert(const KeyType &key, const ValueType &value, const KeyComparator &comparator, int& index);
 
-  bool Lookup(const KeyType &key, ValueType &value, const KeyComparator &comparator) const;
+  bool IsLast(const KeyType &key, const KeyComparator & comparator);
+
+  bool Lookup(const KeyType &key, ValueType &value, const KeyComparator &comparator, int& index) const;
 
   int RemoveAndDeleteRecord(const KeyType &key, const KeyComparator &comparator);
 
