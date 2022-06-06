@@ -60,19 +60,17 @@ dberr_t ExecuteEngine::ExecuteCreateDatabase(pSyntaxNode ast, ExecuteContext *co
 #endif
   string db_name = ast->child_->val_;
   ifstream in("databases.txt");
-  if (!in.is_open()) {
-    printf("Failed to open databases.txt.\n");
-    return DB_FAILED;
-  }
-  string line;
-  while (getline(in, line)) {
-    if (line.back() == '\r') {
-      line.pop_back();
+  if (in.is_open()) {
+    string line;
+    while (getline(in, line)) {
+      if (line.back() == '\r') {
+        line.pop_back();
+      }
+      if (dbs_.find(line) == dbs_.end())
+        dbs_[line] = new DBStorageEngine(line, false);
     }
-    if (dbs_.find(line) == dbs_.end())
-      dbs_[line] = new DBStorageEngine(line);
+    in.close();
   }
-  in.close();
   if (dbs_.find(db_name) != dbs_.end()) {
     printf("Database %s already exists.\n", db_name.c_str());
     return DB_FAILED;
@@ -92,19 +90,17 @@ dberr_t ExecuteEngine::ExecuteDropDatabase(pSyntaxNode ast, ExecuteContext *cont
 #endif
   string db_name = ast->child_->val_;
   ifstream in("databases.txt");
-  if (!in.is_open()) {
-    printf("Failed to open databases.txt.\n");
-    return DB_FAILED;
-  }
-  string line;
-  while (getline(in, line)) {
-    if (line.back() == '\r') {
-      line.pop_back();
+  if (in.is_open()) {
+    string line;
+    while (getline(in, line)) {
+      if (line.back() == '\r') {
+        line.pop_back();
+      }
+      if (dbs_.find(line) == dbs_.end())
+        dbs_[line] = new DBStorageEngine(line, false);
     }
-    if (dbs_.find(line) == dbs_.end())
-      dbs_[line] = new DBStorageEngine(line);
+    in.close();
   }
-  in.close();
   if (dbs_.find(db_name) == dbs_.end()) {
     printf("Database %s does not exist.\n", db_name.c_str());
     return DB_FAILED;
@@ -130,19 +126,17 @@ dberr_t ExecuteEngine::ExecuteShowDatabases(pSyntaxNode ast, ExecuteContext *con
   LOG(INFO) << "ExecuteShowDatabases" << std::endl;
 #endif
   ifstream in("databases.txt");
-  if (!in.is_open()) {
-    printf("Failed to open databases.txt.\n");
-    return DB_FAILED;
-  }
-  string line;
-  while (getline(in, line)) {
-    if (line.back() == '\r') {
-      line.pop_back();
+  if (in.is_open()) {
+    string line;
+    while (getline(in, line)) {
+      if (line.back() == '\r') {
+        line.pop_back();
+      }
+      if (dbs_.find(line) == dbs_.end())
+        dbs_[line] = new DBStorageEngine(line, false);
     }
-    if (dbs_.find(line) == dbs_.end())
-      dbs_[line] = new DBStorageEngine(line);
+    in.close();
   }
-  in.close();
   printf("┌─────────────┐\n");
   printf("│ Database(s) │\n");
   clock_t start = clock();
