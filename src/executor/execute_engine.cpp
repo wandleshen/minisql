@@ -1251,8 +1251,8 @@ dberr_t ExecuteEngine::ExecuteQuit(pSyntaxNode ast, ExecuteContext *context) {
 #endif
   ASSERT(ast->type_ == kNodeQuit, "Unexpected node type.");
   context->flag_quit_ = true;
-  for (auto& i : dbs_) {
-    delete i.second;
-  }
+//  for (auto& i : dbs_) {
+//    delete i.second;
+//  }
   return DB_SUCCESS;
 }

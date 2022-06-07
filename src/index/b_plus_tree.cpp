@@ -153,6 +153,7 @@ bool BPLUSTREE_TYPE::InsertIntoLeaf(const KeyType &key, const ValueType &value, 
   auto leaf = reinterpret_cast<LeafPage *>(FindLeafPage(key, false)->GetData());
   int index = 0;
   if(GetValue(key, result, leaf, index, transaction)) {
+    buffer_pool_manager_->UnpinPage(leaf->GetPageId(), false);
     return false;
   }
   //fetch the page
@@ -549,6 +550,7 @@ Page *BPLUSTREE_TYPE::FindLeafPage(const KeyType &key, bool leftMost) {
   auto leaf = reinterpret_cast<LeafPage*>(buffer_pool_manager_->FetchPage(last_page_id_)->GetData());
   if (!leftMost && leaf->IsLast(key, comparator_))
     return reinterpret_cast<Page * >(leaf);
+  buffer_pool_manager_->UnpinPage(last_page_id_, false);
   page_id_t next_page_id = root_page_id_;
   //获取该页
   InternalPage *page = reinterpret_cast<InternalPage *>

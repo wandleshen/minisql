@@ -19,11 +19,12 @@ TEST(BPlusTreeTests, IndexIteratorTest) {
   }
   // Search keys
   vector<int> v;
+  int idx;
   for (int i = 2; i <= 50; i += 2) {
-    ASSERT_FALSE(tree.GetValue(i, v));
+    ASSERT_FALSE(tree.GetValue(i, v, nullptr, idx));
   }
   for (int i = 1; i <= 49; i += 2) {
-    ASSERT_TRUE(tree.GetValue(i, v));
+    ASSERT_TRUE(tree.GetValue(i, v, nullptr, idx));
     ASSERT_EQ(i * 100, v[v.size() - 1]);
   }
   // Iterator
