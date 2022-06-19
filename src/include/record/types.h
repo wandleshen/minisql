@@ -88,6 +88,8 @@ public:
 
   virtual uint32_t GetSerializedSize(const Field &field, bool is_null) const override;
 
+  virtual const char* GetData(const Field &val) const override;
+
   virtual CmpBool CompareEquals(const Field &left, const Field &right) const override;
 
   virtual CmpBool CompareNotEquals(const Field &left, const Field &right) const override;
@@ -137,6 +139,8 @@ public:
   virtual uint32_t DeserializeFrom(char *storage, Field **field, bool is_null, MemHeap *heap) const override;
 
   virtual uint32_t GetSerializedSize(const Field &field, bool is_null) const override;
+
+  virtual const char* GetData(const Field &val) const override;
 
   virtual CmpBool CompareEquals(const Field &left, const Field &right) const override;
 

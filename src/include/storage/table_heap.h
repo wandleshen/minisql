@@ -1,6 +1,7 @@
 #ifndef MINISQL_TABLE_HEAP_H
 #define MINISQL_TABLE_HEAP_H
 
+#include <queue>
 #include "buffer/buffer_pool_manager.h"
 #include "page/table_page.h"
 #include "storage/table_iterator.h"
@@ -48,7 +49,7 @@ public:
    * @param[in] txn Transaction performing the update
    * @return true is update is successful.
    */
-  bool UpdateTuple(const Row &row, const RowId &rid, Transaction *txn);
+  bool UpdateTuple(Row &row, const RowId &rid, Transaction *txn);
 
   /**
    * Called on Commit/Abort to actually delete a tuple or rollback an insert.
@@ -92,6 +93,8 @@ public:
    */
   inline page_id_t GetFirstPageId() const { return first_page_id_; }
 
+  void RecreateQueue();
+
 private:
   /**
    * create table heap and initialize first page
@@ -105,6 +108,8 @@ private:
      buffer_pool_manager_->NewPage(first_page_id_);
      auto page = reinterpret_cast<TablePage*>(buffer_pool_manager_->FetchPage(first_page_id_));
      page->Init(first_page_id_, INVALID_PAGE_ID, log_manager, txn);
+     last_page_id_ = first_page_id_;
+     max_free_page_.push(MaxHeapNode(first_page_id_, PAGE_SIZE));
   };
 
   /**
@@ -116,12 +121,42 @@ private:
             first_page_id_(first_page_id),
             schema_(schema),
             log_manager_(log_manager),
-            lock_manager_(lock_manager) {}
+            lock_manager_(lock_manager) {
+    auto page = reinterpret_cast<TablePage*>(buffer_pool_manager_->FetchPage(first_page_id_));
+    while (true) {
+      auto size = PAGE_SIZE;
+      auto r_id = new RowId;
+      if (!page->GetFirstTupleRid(r_id)) {
+        buffer_pool_manager_->UnpinPage(page->GetPageId(), false);
+        break;
+      }
+      while (page->GetNextTupleRid(*r_id, r_id)) {
+        size--;
+      }
+      if (size > 0)
+        max_free_page_.push(MaxHeapNode(page->GetPageId(), size));
+      buffer_pool_manager_->UnpinPage(page->GetPageId(), false);
+      if (page->GetNextPageId() == INVALID_PAGE_ID)
+        break;
+      page = reinterpret_cast<TablePage*>(buffer_pool_manager_->FetchPage(page->GetNextPageId()));
+    }
+    last_page_id_ = page->GetPageId();
+  }
 
 private:
+  struct MaxHeapNode {
+    MaxHeapNode(page_id_t page_id, size_t size) : size_(size), page_id_(page_id) {}
+    size_t size_;
+    page_id_t page_id_;
+    bool operator<(const MaxHeapNode &other) const {
+      return size_ < other.size_;
+    }
+  };
   BufferPoolManager *buffer_pool_manager_;
   page_id_t first_page_id_;
+  page_id_t last_page_id_;
   Schema *schema_;
+  priority_queue<MaxHeapNode> max_free_page_;
   [[maybe_unused]] LogManager *log_manager_;
   [[maybe_unused]] LockManager *lock_manager_;
 };

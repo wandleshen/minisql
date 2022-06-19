@@ -41,8 +41,9 @@ TEST(BPlusTreeTests, SampleTest) {
   tree.PrintTree(mgr[0]);
   // Search keys
   vector<int> ans;
+  int idx;
   for (int i = 0; i < n; i++) {
-    tree.GetValue(i, ans);
+    tree.GetValue(i, ans, nullptr, idx);
     ASSERT_EQ(kv_map[i], ans[i]);
   }
   ASSERT_TRUE(tree.Check());
@@ -60,10 +61,10 @@ TEST(BPlusTreeTests, SampleTest) {
   // Check valid
   ans.clear();
   for (int i = 0; i < n / 2; i++) {
-    ASSERT_FALSE(tree.GetValue(delete_seq[i], ans));
+    ASSERT_FALSE(tree.GetValue(delete_seq[i], ans, nullptr, idx));
   }
   for (int i = n / 2; i < n; i++) {
-    ASSERT_TRUE(tree.GetValue(delete_seq[i], ans));
+    ASSERT_TRUE(tree.GetValue(delete_seq[i], ans, nullptr, idx));
     ASSERT_EQ(kv_map[delete_seq[i]], ans[ans.size() - 1]);
   }
 }

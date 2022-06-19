@@ -15,11 +15,43 @@ BPLUSTREE_TYPE::BPlusTree(index_id_t index_id, BufferPoolManager *buffer_pool_ma
           internal_max_size_(internal_max_size) {
   auto header_page = reinterpret_cast<IndexRootsPage *>(buffer_pool_manager_->FetchPage(INDEX_ROOTS_PAGE_ID)->GetData());
   header_page->GetRootId(index_id_, &root_page_id_);
-  buffer_pool_manager_->UnpinPage(0, false);
+  buffer_pool_manager_->UnpinPage(INDEX_ROOTS_PAGE_ID, false);
+  if (root_page_id_ != INVALID_PAGE_ID) {
+    auto root = reinterpret_cast<InternalPage *>(buffer_pool_manager_->FetchPage(root_page_id_)->GetData());
+    auto leaf = reinterpret_cast<LeafPage *>(FindLeafPage(root->KeyAt(0), true));
+    last_page_id_ = leaf->GetPageId();
+    buffer_pool_manager_->UnpinPage(root_page_id_, false);
+    buffer_pool_manager_->UnpinPage(leaf->GetPageId(), false);
+  }
 }
 
 INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_TYPE::Destroy() {
+  auto header_page = reinterpret_cast<IndexRootsPage *>(buffer_pool_manager_->FetchPage(INDEX_ROOTS_PAGE_ID)->GetData());
+  header_page->Delete(index_id_);
+  buffer_pool_manager_->UnpinPage(INDEX_ROOTS_PAGE_ID, true);
+  if (root_page_id_ == INVALID_PAGE_ID)
+    return;
+  // dfs
+  list<page_id_t> stack;
+  stack.emplace_back(root_page_id_);
+  while (!stack.empty()) {
+    auto page = *stack.begin();
+    stack.pop_front();
+    auto node = reinterpret_cast<InternalPage*>(buffer_pool_manager_
+                    ->FetchPage(page)->GetData());
+    if (node->IsLeafPage()) {
+      buffer_pool_manager_->UnpinPage(page, false);
+      buffer_pool_manager_->DeletePage(page);
+      continue;
+    }
+    for (int i = 0; i < node->GetSize(); ++i) {
+      if (node->ValueAt(i) != INVALID_PAGE_ID)
+        stack.emplace_back(node->ValueAt(i));
+    }
+    buffer_pool_manager_->UnpinPage(page, false);
+    buffer_pool_manager_->DeletePage(page);
+  }
 }
 
 /*
@@ -40,12 +72,13 @@ bool BPLUSTREE_TYPE::IsEmpty() const {
  * @return : true means key exists
  */
 INDEX_TEMPLATE_ARGUMENTS
-bool BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> &result, Transaction *transaction) {
+bool BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> &result, LeafPage* leaf, int& index, Transaction *transaction) {
   if(this->IsEmpty()) return false; //空树
-  LeafPage *leaf = reinterpret_cast<LeafPage *>(FindLeafPage(key, false));
+  if (!leaf)
+    leaf = reinterpret_cast<LeafPage *>(FindLeafPage(key, false));
   //找到了
   ValueType value;
-  if(leaf->Lookup(key, value, comparator_))
+  if(leaf->Lookup(key, value, comparator_, index))
   {
     //这里有点疑惑？为什么传的是vector型而不是直接是ValueType...
     //先直接push_back吧
@@ -95,8 +128,10 @@ void BPLUSTREE_TYPE::StartNewTree(const KeyType &key, const ValueType &value) {
     auto *leaf = reinterpret_cast<LeafPage *>(root->GetData());
     leaf->Init(root_id, INVALID_PAGE_ID, leaf_max_size_);
     root_page_id_ = root_id;
+    last_page_id_ = root_page_id_;
     UpdateRootPageId(true);
-    leaf->Insert(key, value, comparator_);
+    int index = -1;
+    leaf->Insert(key, value, comparator_, index);
     buffer_pool_manager_->UnpinPage(root_page_id_, true);
   }
   //failed
@@ -115,16 +150,21 @@ INDEX_TEMPLATE_ARGUMENTS
 bool BPLUSTREE_TYPE::InsertIntoLeaf(const KeyType &key, const ValueType &value, Transaction *transaction) {
   std::vector<ValueType> result;
   //已经存在
-  if(GetValue(key, result, transaction)) {
+  auto leaf = reinterpret_cast<LeafPage *>(FindLeafPage(key, false)->GetData());
+  int index = 0;
+  if(GetValue(key, result, leaf, index, transaction)) {
+    buffer_pool_manager_->UnpinPage(leaf->GetPageId(), false);
     return false;
   }
   //fetch the page
-  LeafPage * leaf = reinterpret_cast<LeafPage *>(FindLeafPage(key, false)->GetData());
-  leaf->Insert(key, value, comparator_);
+//  LeafPage * leaf = reinterpret_cast<LeafPage *>(FindLeafPage(key, false)->GetData());
+  leaf->Insert(key, value, comparator_, index);
+  last_page_id_ = leaf->GetPageId();
   //存疑
   if(leaf->GetSize() > leaf->GetMaxSize())
   {
     LeafPage *new_leaf = Split(leaf);
+    last_page_id_ = new_leaf->GetPageId();
     InsertIntoParent(leaf, new_leaf->KeyAt(0), new_leaf, transaction);
     buffer_pool_manager_->UnpinPage(new_leaf->GetPageId(), true);
   }
@@ -482,8 +522,8 @@ INDEXITERATOR_TYPE BPLUSTREE_TYPE::Begin() {
  */
 INDEX_TEMPLATE_ARGUMENTS
 INDEXITERATOR_TYPE BPLUSTREE_TYPE::Begin(const KeyType &key) {
-  auto leaf = reinterpret_cast<LeafPage *>(FindLeafPage(key, true));
-  return INDEXITERATOR_TYPE(leaf, buffer_pool_manager_, 0);
+  auto leaf = reinterpret_cast<LeafPage *>(FindLeafPage(key, false));
+  return INDEXITERATOR_TYPE(leaf, buffer_pool_manager_, leaf->KeyIndex(key, comparator_));
 }
 
 /*
@@ -507,6 +547,10 @@ INDEXITERATOR_TYPE BPLUSTREE_TYPE::End() {
 INDEX_TEMPLATE_ARGUMENTS
 Page *BPLUSTREE_TYPE::FindLeafPage(const KeyType &key, bool leftMost) {
   if (IsEmpty()) return nullptr;
+  auto leaf = reinterpret_cast<LeafPage*>(buffer_pool_manager_->FetchPage(last_page_id_)->GetData());
+  if (!leftMost && leaf->IsLast(key, comparator_))
+    return reinterpret_cast<Page * >(leaf);
+  buffer_pool_manager_->UnpinPage(last_page_id_, false);
   page_id_t next_page_id = root_page_id_;
   //获取该页
   InternalPage *page = reinterpret_cast<InternalPage *>
@@ -515,6 +559,10 @@ Page *BPLUSTREE_TYPE::FindLeafPage(const KeyType &key, bool leftMost) {
   {
     buffer_pool_manager_->UnpinPage(page->GetPageId(), false);
     page = reinterpret_cast<InternalPage *>(buffer_pool_manager_->FetchPage(next_page_id)->GetData());
+    // 警钟长鸣！不要随便混用 LeafPage 和 InternalPage 的函数！
+    if (page->IsLeafPage()) {
+      break;
+    }
     if(leftMost)
       next_page_id = page->ValueAt(0); //find the left most leaf page
     else
@@ -541,7 +589,7 @@ void BPLUSTREE_TYPE::UpdateRootPageId(int insert_record) {
   else
     //0:更新某个root
     header_page->Update(index_id_, root_page_id_);
-  buffer_pool_manager_->UnpinPage(0, true);
+  buffer_pool_manager_->UnpinPage(INDEX_ROOTS_PAGE_ID, true);
 }
 
 /**

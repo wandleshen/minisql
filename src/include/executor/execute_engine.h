@@ -1,6 +1,7 @@
 #ifndef MINISQL_EXECUTE_ENGINE_H
 #define MINISQL_EXECUTE_ENGINE_H
 
+#include <algorithm>
 #include <string>
 #include <unordered_map>
 #include "common/dberr.h"

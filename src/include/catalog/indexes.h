@@ -36,7 +36,8 @@ private:
   IndexMetadata() = delete;
 
   explicit IndexMetadata(const index_id_t index_id, const std::string &index_name,
-                         const table_id_t table_id, const std::vector<uint32_t> &key_map) {}
+                         const table_id_t table_id, const std::vector<uint32_t> &key_map)
+                        : index_id_(index_id), index_name_(index_name), table_id_(table_id), key_map_(key_map) {}
 
 private:
   static constexpr uint32_t INDEX_METADATA_MAGIC_NUM = 344528;
@@ -62,9 +63,12 @@ public:
 
   void Init(IndexMetadata *meta_data, TableInfo *table_info, BufferPoolManager *buffer_pool_manager) {
     // Step1: init index metadata and table info
+    meta_data_ = meta_data;
+    table_info_ = table_info;
     // Step2: mapping index key to key schema
+    key_schema_ = Schema::ShallowCopySchema(table_info->GetSchema(), meta_data->GetKeyMapping(), heap_);
     // Step3: call CreateIndex to create the index
-    ASSERT(false, "Not Implemented yet.");
+    index_ = CreateIndex(buffer_pool_manager);
   }
 
   inline Index *GetIndex() { return index_; }
@@ -77,13 +81,18 @@ public:
 
   inline TableInfo *GetTableInfo() const { return table_info_; }
 
+  inline const std::vector<uint32_t> &GetKeyMapping() const { return meta_data_->key_map_; }
+
 private:
   explicit IndexInfo() : meta_data_{nullptr}, index_{nullptr}, table_info_{nullptr},
                          key_schema_{nullptr}, heap_(new SimpleMemHeap()) {}
 
   Index *CreateIndex(BufferPoolManager *buffer_pool_manager) {
-    ASSERT(false, "Not Implemented yet.");
-    return nullptr;
+    using INDEX_KEY_TYPE = GenericKey<32>;
+    using INDEX_COMPARATOR_TYPE = GenericComparator<32>;
+    using BP_TREE_INDEX = BPlusTreeIndex<INDEX_KEY_TYPE, RowId, INDEX_COMPARATOR_TYPE>;
+    void *buf = heap_->Allocate(sizeof(BP_TREE_INDEX));
+    return new(buf)BP_TREE_INDEX(meta_data_->GetIndexId(), key_schema_, buffer_pool_manager);
   }
 
 private:

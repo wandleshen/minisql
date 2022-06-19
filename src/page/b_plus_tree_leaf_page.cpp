@@ -81,8 +81,9 @@ const MappingType &B_PLUS_TREE_LEAF_PAGE_TYPE::GetItem(int index) {
  * @return page size after insertion
  */
 INDEX_TEMPLATE_ARGUMENTS
-int B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType &key, const ValueType &value, const KeyComparator &comparator) {
-  int index = KeyIndex(key, comparator);
+int B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType &key, const ValueType &value, const KeyComparator &comparator, int& index) {
+  if (index == -1)
+    index = KeyIndex(key, comparator);
   if (index <= GetSize() && comparator(array_[index].first, key) == 0) {
     array_[index].second = value;
     return GetSize();
@@ -96,6 +97,12 @@ int B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType &key, const ValueType &valu
   return GetSize();
 }
 
+INDEX_TEMPLATE_ARGUMENTS
+bool B_PLUS_TREE_LEAF_PAGE_TYPE::IsLast(const KeyType &key, const KeyComparator &comparator) {
+  return ((comparator(array_[GetSize()-1].first, key) < 0 && next_page_id_ == INVALID_PAGE_ID) ||
+          (comparator(array_[0].first, key) < 0 && comparator(array_[GetSize()-1].first, key) > 0));
+}
+
 /*****************************************************************************
  * SPLIT
  *****************************************************************************/
@@ -105,7 +112,11 @@ int B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType &key, const ValueType &valu
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveHalfTo(BPlusTreeLeafPage *recipient) {
   recipient->SetNextPageId(next_page_id_);
-  int size = GetSize() / 2;
+  int size;
+  if (GetSize() % 2)
+    size = GetSize() / 2;
+  else
+   size = GetSize() / 2 + 1;
   for (int i = size+recipient->GetSize(); i >= 0; i--) {
     if (i > size)
       recipient->array_[i] = recipient->array_[i - size];
@@ -136,8 +147,8 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyNFrom(MappingType *items, int size) {
  * If the key does not exist, then return false
  */
 INDEX_TEMPLATE_ARGUMENTS
-bool B_PLUS_TREE_LEAF_PAGE_TYPE::Lookup(const KeyType &key, ValueType &value, const KeyComparator &comparator) const {
-  int index = KeyIndex(key, comparator);
+bool B_PLUS_TREE_LEAF_PAGE_TYPE::Lookup(const KeyType &key, ValueType &value, const KeyComparator &comparator, int& index) const {
+  index = KeyIndex(key, comparator);
   if (index < GetSize() && comparator(array_[index].first, key) == 0) {
     value = array_[index].second;
     return true;

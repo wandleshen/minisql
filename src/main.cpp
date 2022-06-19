@@ -80,7 +80,7 @@ int main(int argc, char **argv) {
 
     // quit condition
     if (context.flag_quit_) {
-      printf("bye!\n");
+      printf("bye nya!\n");
       break;
     }
 

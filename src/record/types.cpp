@@ -105,6 +105,12 @@ uint32_t TypeInt::GetSerializedSize(const Field &field, bool is_null) const {
   return GetTypeSize(type_id_);
 }
 
+const char* TypeInt::GetData(const Field &val) const {
+  char* buf = new char[GetTypeSize(type_id_)];
+  strcpy(buf, std::to_string(val.value_.integer_).c_str());
+  return buf;
+}
+
 CmpBool TypeInt::CompareEquals(const Field &left, const Field &right) const {
   ASSERT(left.CheckComparable(right), "Not comparable.");
   if (left.IsNull() || right.IsNull()) {
@@ -178,6 +184,12 @@ uint32_t TypeFloat::GetSerializedSize(const Field &field, bool is_null) const {
     return 0;
   }
   return GetTypeSize(type_id_);
+}
+
+const char* TypeFloat::GetData(const Field &val) const {
+  char* buf = new char[GetTypeSize(type_id_)];
+  strcpy(buf, std::to_string(val.value_.float_).c_str());
+  return buf;
 }
 
 CmpBool TypeFloat::CompareEquals(const Field &left, const Field &right) const {
