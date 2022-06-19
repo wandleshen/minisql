@@ -103,13 +103,16 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::PopulateNewRoot(const ValueType &old_value,
 INDEX_TEMPLATE_ARGUMENTS
 int B_PLUS_TREE_INTERNAL_PAGE_TYPE::InsertNodeAfter(const ValueType &old_value, const KeyType &new_key,
                                                     const ValueType &new_value) {
-  for (int i = 0; i < GetSize(); i++) {
+    //遍历查找
+    for (int i = 0; i < GetSize(); i++) {
     if (array_[i].second == old_value) {
       for (int j = GetSize() - 1; j > i; j--) {
-        array_[j + 1] = array_[j];
+        array_[j + 1] = array_[j];  //拷贝
       }
+      //插入键值对
       array_[i + 1].first = new_key;
       array_[i + 1].second = new_value;
+      //修改大小
       SetSize(GetSize() + 1);
       return GetSize();
     }
@@ -129,17 +132,21 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveHalfTo(BPlusTreeInternalPage *recipient
   auto page = buffer_pool_manager->FetchPage(GetPageId());
   if (page != nullptr) {
     page->WLatch();
-    if (GetSize() % 2)
+    //设置大小为原来的一半
+    if (GetSize() % 2) //奇数
       recipient->SetSize(GetSize()/2+1);
-    else
+    else //偶数
       recipient->SetSize(GetSize()/2);
     SetSize(GetSize() / 2);
+    //转移一半键值
     for (int i = 0; i < recipient->GetSize(); i++) {
       auto child_page = buffer_pool_manager->FetchPage(array_[i + GetSize()].second);
       if (child_page != nullptr) {
         child_page->WLatch();
         auto node = reinterpret_cast<BPlusTreeInternalPage *>(child_page->GetData());
+        //链接父节点
         node->SetParentPageId(recipient->GetPageId());
+        //转移键值
         recipient->array_[i] = array_[i + GetSize()];
         child_page->WUnlatch();
         buffer_pool_manager->UnpinPage(child_page->GetPageId(), true);
@@ -149,15 +156,6 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveHalfTo(BPlusTreeInternalPage *recipient
     page->WUnlatch();
     buffer_pool_manager->UnpinPage(GetPageId(), true);
   }
-//  if (recipient->GetParentPageId() != INVALID_PAGE_ID) {
-//    page = buffer_pool_manager->FetchPage(recipient->GetParentPageId());
-//    if (page != nullptr) {
-//      auto node = reinterpret_cast<BPlusTreeInternalPage *>(page->GetData());
-//      node->SetSize(node->GetSize() + 1);
-//      node->InsertNodeAfter(GetPageId(), recipient->array_[0].first, recipient->GetPageId());
-//      buffer_pool_manager->UnpinPage(recipient->GetParentPageId(), true);
-//    }
-//  }
 }
 
 /* Copy entries into me, starting from {items} and copy {size} entries.
@@ -170,11 +168,13 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyNFrom(MappingType *items, int size, Buf
   if (page != nullptr) {
     page->WLatch();
     SetSize(size);
+    //拷贝size个元素
     for (int i = 0; i < size; i++) {
       array_[i] = items[i];
       auto child_page = buffer_pool_manager->FetchPage(items[i].second);
       auto node = reinterpret_cast<BPlusTreePage*>(child_page->GetData());
       if (child_page != nullptr) {
+        //更改父节点
         node->SetParentPageId(GetPageId());
         buffer_pool_manager->UnpinPage(items[i].second, true);
       }
@@ -238,33 +238,26 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveAllTo(BPlusTreeInternalPage *recipient,
     page->WLatch();
     auto size = recipient->GetSize();
     recipient->SetSize(GetSize() + recipient->GetSize());
+    //全部转移
     for (int i = 0; i < GetSize(); i++) {
+      //通过键值对找到该节点
       auto child_page = buffer_pool_manager->FetchPage(array_[i].second);
       child_page->WLatch();
       if (child_page != nullptr) {
         auto node = reinterpret_cast<BPlusTreePage*>(child_page->GetData());
+        //修改父节点指针
         node->SetParentPageId(recipient->GetPageId());
         child_page->WUnlatch();
         buffer_pool_manager->UnpinPage(array_[i].second, true);
       }
       recipient->array_[i + size] = array_[i];
     }
+    //修改父节点指针
     recipient->SetParentPageId(GetParentPageId());
     SetSize(0);
     page->WUnlatch();
     buffer_pool_manager->UnpinPage(GetPageId(), true);
   }
-//  if (GetParentPageId() != INVALID_PAGE_ID) {
-//    page = buffer_pool_manager->FetchPage(recipient->GetParentPageId());
-//    if (page != nullptr) {
-//      page->WLatch();
-//      auto node = reinterpret_cast<BPlusTreeInternalPage *>(page->GetData());
-//      node->InsertNodeAfter(GetPageId(), recipient->array_[0].first, recipient->GetPageId());
-//      node->Remove(ValueIndex(GetPageId()));
-//      page->WUnlatch();
-//      buffer_pool_manager->UnpinPage(recipient->GetParentPageId(), true);
-//    }
-//  }
 }
 
 /*****************************************************************************
@@ -284,10 +277,13 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveFirstToEndOf(BPlusTreeInternalPage *rec
   auto page = buffer_pool_manager->FetchPage(GetPageId());
   if (page != nullptr) {
     page->WLatch();
+    //完成相关设置
     recipient->SetSize(recipient->GetSize() + 1);
+    //末元素追加
     recipient->array_[recipient->GetSize() - 1] = array_[0];
     recipient->SetParentPageId(GetParentPageId());
     SetSize(GetSize() - 1);
+    //移出首个键值对
     for (int i = 0; i < GetSize(); i++) {
       array_[i] = array_[i + 1];
     }
@@ -299,6 +295,7 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveFirstToEndOf(BPlusTreeInternalPage *rec
     if (page != nullptr) {
       page->WLatch();
       auto node = reinterpret_cast<BPlusTreeInternalPage *>(page->GetData());
+      //更新父节点的key
       node->SetKeyAt(node->ValueIndex(GetPageId()), array_[0].first);
       page->WUnlatch();
       buffer_pool_manager->UnpinPage(recipient->GetParentPageId(), true);
@@ -307,6 +304,7 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveFirstToEndOf(BPlusTreeInternalPage *rec
     if (page != nullptr) {
       page->WLatch();
       auto node = reinterpret_cast<BPlusTreeInternalPage *>(page->GetData());
+      //设置父节点
       node->SetParentPageId(recipient->GetPageId());
       page->WUnlatch();
       buffer_pool_manager->UnpinPage(recipient->array_[recipient->GetSize() - 1].second, true);
@@ -324,7 +322,7 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyLastFrom(const MappingType &pair, Buffe
   if (page != nullptr) {
     page->WLatch();
     SetSize(GetSize() + 1);
-    array_[GetSize() - 1] = pair;
+    array_[GetSize() - 1] = pair; //设置最后一个键值对
     page->WUnlatch();
     buffer_pool_manager->UnpinPage(GetPageId(), true);
   }
@@ -332,6 +330,7 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyLastFrom(const MappingType &pair, Buffe
   if (page != nullptr) {
     page->WLatch();
     auto node = reinterpret_cast<BPlusTreeInternalPage*>(page->GetData());
+    //更新
     node->SetParentPageId(GetPageId());
     page->WUnlatch();
     buffer_pool_manager->UnpinPage(array_[GetSize() - 1].second, true);
@@ -352,9 +351,11 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveLastToFrontOf(BPlusTreeInternalPage *re
   if (page != nullptr) {
     page->WLatch();
     recipient->SetSize(recipient->GetSize() + 1);
+    //腾出空位
     for (int i = recipient->GetSize() - 1; i > 0; i--) {
       recipient->array_[i] = recipient->array_[i - 1];
     }
+    //插入首个键值对
     recipient->array_[0] = array_[GetSize() - 1];
     recipient->SetParentPageId(GetParentPageId());
     SetSize(GetSize() - 1);
@@ -366,6 +367,7 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveLastToFrontOf(BPlusTreeInternalPage *re
     if (page != nullptr) {
       page->WLatch();
       auto node = reinterpret_cast<BPlusTreeInternalPage *>(page->GetData());
+      //检查更新key
       node->SetKeyAt(node->ValueIndex(recipient->GetPageId()), recipient->array_[0].first);
       page->WUnlatch();
       buffer_pool_manager->UnpinPage(recipient->GetParentPageId(), true);
@@ -374,6 +376,7 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveLastToFrontOf(BPlusTreeInternalPage *re
     if (page != nullptr) {
       page->WLatch();
       auto node = reinterpret_cast<BPlusTreeInternalPage *>(page->GetData());
+      //设置父节点
       node->SetParentPageId(recipient->GetPageId());
       page->WUnlatch();
       buffer_pool_manager->UnpinPage(recipient->array_[0].second, true);
@@ -391,9 +394,11 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyFirstFrom(const MappingType &pair, Buff
   if (page != nullptr) {
     page->WLatch();
     SetSize(GetSize() + 1);
+    //腾出首个位置
     for (int i = GetSize() - 1; i > 0; i--) {
       array_[i] = array_[i - 1];
     }
+    //赋值
     array_[0] = pair;
     page->WUnlatch();
     buffer_pool_manager->UnpinPage(GetPageId(), true);
@@ -402,6 +407,7 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyFirstFrom(const MappingType &pair, Buff
   if (page != nullptr) {
     page->WLatch();
     auto node = reinterpret_cast<BPlusTreeInternalPage*>(page->GetData());
+    //更新key
     node->SetKeyAt(node->ValueIndex(GetPageId()), array_[0].first);
     page->WUnlatch();
     buffer_pool_manager->UnpinPage(GetParentPageId(), true);
@@ -410,6 +416,7 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyFirstFrom(const MappingType &pair, Buff
   if (page != nullptr) {
     page->WLatch();
     auto node = reinterpret_cast<BPlusTreeInternalPage*>(page->GetData());
+    //设置parent
     node->SetParentPageId(GetPageId());
     page->WUnlatch();
     buffer_pool_manager->UnpinPage(array_[0].second, true);
