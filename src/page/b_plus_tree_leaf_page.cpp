@@ -113,10 +113,12 @@ INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveHalfTo(BPlusTreeLeafPage *recipient) {
   recipient->SetNextPageId(next_page_id_);
   int size;
+  //大小设置为一半
   if (GetSize() % 2)
     size = GetSize() / 2;
   else
    size = GetSize() / 2 + 1;
+  //拷贝
   for (int i = size+recipient->GetSize(); i >= 0; i--) {
     if (i > size)
       recipient->array_[i] = recipient->array_[i - size];
@@ -149,6 +151,7 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyNFrom(MappingType *items, int size) {
 INDEX_TEMPLATE_ARGUMENTS
 bool B_PLUS_TREE_LEAF_PAGE_TYPE::Lookup(const KeyType &key, ValueType &value, const KeyComparator &comparator, int& index) const {
   index = KeyIndex(key, comparator);
+  //运用比较器比较键值
   if (index < GetSize() && comparator(array_[index].first, key) == 0) {
     value = array_[index].second;
     return true;
@@ -168,7 +171,8 @@ bool B_PLUS_TREE_LEAF_PAGE_TYPE::Lookup(const KeyType &key, ValueType &value, co
 INDEX_TEMPLATE_ARGUMENTS
 int B_PLUS_TREE_LEAF_PAGE_TYPE::RemoveAndDeleteRecord(const KeyType &key, const KeyComparator &comparator) {
   int index = KeyIndex(key, comparator);
-  if (index < GetSize() && comparator(array_[index].first, key) == 0) {
+  if (index < GetSize() && comparator(array_[index].first, key) == 0) { //找到了
+    //删除，后面前移
     for (int i = index; i < GetSize() - 1; i++) {
       array_[i] = array_[i + 1];
     }
@@ -187,9 +191,11 @@ int B_PLUS_TREE_LEAF_PAGE_TYPE::RemoveAndDeleteRecord(const KeyType &key, const 
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveAllTo(BPlusTreeLeafPage *recipient) {
   recipient->SetNextPageId(GetNextPageId());
+  //追加
   for (int i = 0; i < GetSize(); i++) {
     recipient->array_[i + recipient->GetSize()] = array_[i];
   }
+  //更新大小
   recipient->SetSize(GetSize() + recipient->GetSize());
   SetSize(0);
 }
@@ -203,8 +209,10 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveAllTo(BPlusTreeLeafPage *recipient) {
  */
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveFirstToEndOf(BPlusTreeLeafPage *recipient) {
+  //赋值
   recipient->array_[recipient->GetSize()] = array_[0];
   recipient->SetSize(recipient->GetSize() + 1);
+  //覆盖
   for (int i = 0; i < GetSize() - 1; i++) {
     array_[i] = array_[i + 1];
   }
@@ -228,7 +236,7 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveLastToFrontOf(BPlusTreeLeafPage *recipient)
   for (int i = recipient->GetSize(); i > 0; i--) {
     recipient->array_[i] = recipient->array_[i - 1];
   }
-  recipient->array_[0] = array_[GetSize() - 1];
+  recipient->array_[0] = array_[GetSize() - 1]; //拷贝
   recipient->SetSize(recipient->GetSize() + 1);
   SetSize(GetSize() - 1);
 }
@@ -242,7 +250,7 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyFirstFrom(const MappingType &item) {
   for (int i = GetSize(); i > 0; i--) {
     array_[i] = array_[i - 1];
   }
-  array_[0] = item;
+  array_[0] = item; //赋值
   SetSize(GetSize() + 1);
 }
 
