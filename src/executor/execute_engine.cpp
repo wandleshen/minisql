@@ -60,6 +60,7 @@ dberr_t ExecuteEngine::ExecuteCreateDatabase(pSyntaxNode ast, ExecuteContext *co
 #endif
   string db_name = ast->child_->val_;
   ifstream in("databases.txt");
+  // 读取数据库名称的文本文件，导入所有已存在的数据库
   if (in.is_open()) {
     string line;
     while (getline(in, line)) {
@@ -71,11 +72,13 @@ dberr_t ExecuteEngine::ExecuteCreateDatabase(pSyntaxNode ast, ExecuteContext *co
     }
     in.close();
   }
+  // 数据库已存在
   if (dbs_.find(db_name) != dbs_.end()) {
     printf("Database %s already exists.\n", db_name.c_str());
     return DB_FAILED;
   }
   clock_t start = clock();
+  // 新建数据库写入文本文件
   dbs_[db_name] = new DBStorageEngine(db_name);
   ofstream out("databases.txt", ios::app);
   out << db_name << endl;
@@ -106,6 +109,7 @@ dberr_t ExecuteEngine::ExecuteDropDatabase(pSyntaxNode ast, ExecuteContext *cont
     return DB_FAILED;
   }
   clock_t start = clock();
+  // 删除数据库，删掉文本文件中的内容
   delete dbs_[db_name];
   dbs_.erase(db_name);
   ofstream out("databases.txt");
@@ -160,9 +164,11 @@ dberr_t ExecuteEngine::ExecuteUseDatabase(pSyntaxNode ast, ExecuteContext *conte
     printf("Database %s does not exist.\n", db_name.c_str());
     return DB_FAILED;
   } else if (dbs_.find(db_name) != dbs_.end()) {
+    // 已经在 map 中的数据库
     current_db_ = db_name;
     return DB_SUCCESS;
   } else {
+    // 没有读取但是存在在硬盘中的数据库
     dbs_[db_name] = new DBStorageEngine(db_name, false);
     current_db_ = db_name;
     return DB_SUCCESS;
@@ -262,6 +268,7 @@ dberr_t ExecuteEngine::ExecuteCreateTable(pSyntaxNode ast, ExecuteContext *conte
   // create table
   db->catalog_mgr_->CreateTable(table_name, new Schema(columns),
                                 nullptr, table_info);
+  // 针对 unique 的列创建索引
   for (auto & column : columns) {
     if (column->IsUnique()) {
       IndexInfo* index_info = nullptr;
@@ -312,6 +319,7 @@ dberr_t ExecuteEngine::ExecuteShowIndexes(pSyntaxNode ast, ExecuteContext *conte
   printf("┌────────────────────┐\n");
   printf("│ Indexes_in_%-7s │\n", current_db_.substr(0, 7).c_str());
   clock_t start = clock();
+  // 遍历表
   for (auto& table : tables) {
     vector<IndexInfo *> indexes;
     db->catalog_mgr_->GetTableIndexes(table->GetTableName(), indexes);
@@ -320,6 +328,7 @@ dberr_t ExecuteEngine::ExecuteShowIndexes(pSyntaxNode ast, ExecuteContext *conte
       printf("├────────────────────┤\n");
       printf("│Table: %-13s│\n", table->GetTableName().c_str());
     }
+    // 遍历索引
     for (auto& index : indexes) {
       printf("├────────────────────┤\n");
       printf("│  Index: %-11s│\n", index->GetIndexName().c_str());
@@ -353,6 +362,7 @@ dberr_t ExecuteEngine::ExecuteCreateIndex(pSyntaxNode ast, ExecuteContext *conte
     return DB_INDEX_ALREADY_EXIST;
   }
   clock_t start = clock();
+  // 对于索引类型的判断
   if (ast->child_->next_->next_->next_) {
     auto key_type = ast->child_->next_->next_->next_;
     if (strcmp(key_type->child_->val_, "btree") != 0) {
@@ -390,6 +400,7 @@ dberr_t ExecuteEngine::ExecuteDropIndex(pSyntaxNode ast, ExecuteContext *context
   vector<TableInfo *> tables;
   clock_t start = clock();
   db->catalog_mgr_->GetTables(tables);
+  // 遍历所有表找到名称对应的索引
   for (auto& table : tables) {
     IndexInfo * index_info;
     if (db->catalog_mgr_->GetIndex(table->GetTableName(),
@@ -412,8 +423,17 @@ using INDEX_KEY_TYPE = GenericKey<32>;
 using INDEX_COMPARATOR_TYPE = GenericComparator<32>;
 using BP_TREE_INDEX = BPlusTreeIndex<INDEX_KEY_TYPE, RowId, INDEX_COMPARATOR_TYPE>;
 
+/**
+ * 用于执行 where 的查询
+ * @param condition 需要操作的
+ * @param range 搜索的范围，如果为空就是全局，不然就是在 range 中进行搜索
+ * @param info 表的信息，用于类型判断
+ * @param indexes 索引，用于加速搜索
+ * @return
+ */
 dberr_t ExecuteQuery(pSyntaxNode& condition, vector<RowId>& range, TableInfo* info, vector<IndexInfo*> indexes) {
   IndexInfo* idx = nullptr;
+  // 寻找用于加速的索引
   for (auto& index : indexes) {
     if (index->GetIndexKeySchema()->GetColumn(0)->GetName() == condition->child_->val_ &&
         index->GetIndexKeySchema()->GetColumns().size() == 1) {
@@ -426,7 +446,7 @@ dberr_t ExecuteQuery(pSyntaxNode& condition, vector<RowId>& range, TableInfo* in
     return DB_FAILED;
   auto column = info->GetSchema()->GetColumn(column_idx);
   vector<Field> key_value;
-
+  // 构造用于搜索的 keys
   if (condition->child_->next_->type_ != kNodeNull) {
     char* value = (char*)malloc(column->GetLength()+1);
     memset(value, 0, column->GetLength()+1);
@@ -442,9 +462,11 @@ dberr_t ExecuteQuery(pSyntaxNode& condition, vector<RowId>& range, TableInfo* in
   }
 
   if (range.empty() && idx && strcmp(condition->val_, "<>") != 0) {
+    // 全局搜索并且不是不等于的搜索
     auto btreeidx = reinterpret_cast<BP_TREE_INDEX*>(idx->GetIndex());
     INDEX_KEY_TYPE key;
     key.SerializeFromKey(Row(key_value), idx->GetIndexKeySchema());
+    // 使用索引的各种情况的搜索
     if (strcmp(condition->val_, "=") == 0) {
       btreeidx->ScanKey(Row(key_value), range, nullptr);
     } else if (strcmp(condition->val_, ">") == 0) {
@@ -474,6 +496,7 @@ dberr_t ExecuteQuery(pSyntaxNode& condition, vector<RowId>& range, TableInfo* in
     }
 
   } else if (range.empty()){
+    // 无索引的全局搜索或不等于搜索
     if (strcmp(condition->val_, "=") == 0) {
       for (auto iter = info->GetTableHeap()->Begin(nullptr); iter!= info->GetTableHeap()->End(); ++iter) {
         if ((*iter).GetField(column_idx)->CompareEquals(key_value[0]) == CmpBool::kTrue) {
@@ -526,6 +549,7 @@ dberr_t ExecuteQuery(pSyntaxNode& condition, vector<RowId>& range, TableInfo* in
 
 
   } else {
+    // 针对特定范围的遍历搜索
     vector<RowId> new_range;
     if (strcmp(condition->val_, "=") == 0) {
       for (auto iter: range) {
@@ -630,6 +654,7 @@ dberr_t ExecuteEngine::ExecuteSelect(pSyntaxNode ast, ExecuteContext *context) {
     db->catalog_mgr_->GetTableIndexes(table_name, indexes);
     list<pSyntaxNode> conditions;
     auto where = ast->child_->next_->next_->child_;
+    // 将所有的 where 都写入 list
     while (where->child_) {
       conditions.emplace_front(where);
       where = where->child_;
@@ -638,6 +663,7 @@ dberr_t ExecuteEngine::ExecuteSelect(pSyntaxNode ast, ExecuteContext *context) {
       auto condition = conditions.front();
       conditions.pop_front();
       if (strcmp(condition->val_, "and") != 0 && strcmp(condition->val_, "or") != 0) {
+        // 不是 and 或者 or 的情况，进行条件搜索
         if (row_ids.empty())
           row_ids.emplace_back(vector<RowId>());
         if (ExecuteQuery(condition, row_ids.back(), table_info, indexes) == DB_FAILED) {
@@ -645,6 +671,7 @@ dberr_t ExecuteEngine::ExecuteSelect(pSyntaxNode ast, ExecuteContext *context) {
           return DB_FAILED;
         }
       } else if (strcmp(condition->val_, "and") == 0) {
+        // and 情况的搜索，根据上一次搜索的结果继续搜索
         if (row_ids.empty())
           row_ids.emplace_back(vector<RowId>());
         auto right = condition->child_->next_;
@@ -653,6 +680,7 @@ dberr_t ExecuteEngine::ExecuteSelect(pSyntaxNode ast, ExecuteContext *context) {
           return DB_FAILED;
         }
       } else if (strcmp(condition->val_, "or") == 0) {
+        // or 情况的搜索，新建一个搜索序列开始搜索
         auto right = condition->child_->next_;
         vector<RowId> new_row_id;
         row_ids.emplace_back(new_row_id);
@@ -663,14 +691,17 @@ dberr_t ExecuteEngine::ExecuteSelect(pSyntaxNode ast, ExecuteContext *context) {
       }
     }
   }
+  // 将所有的搜索序列合在一起进行 or 的操作
   for (auto& row_id : row_ids) {
     for (auto& id : row_id) {
       ans.emplace_back(id);
     }
   }
+  // 去重
   ans.sort();
   ans.unique();
   int row_count = 0;
+  // 格式化输出结果
   printf("┌");
   if (column_names.empty()) {
     for (uint32_t i = 0; i < table_info->GetSchema()->GetColumnCount() - 1; ++i) {
@@ -799,6 +830,7 @@ dberr_t ExecuteEngine::ExecuteInsert(pSyntaxNode ast, ExecuteContext *context) {
   vector<SyntaxNodeType> types;
   vector<string> row_values;
   auto schema = table_info->GetSchema();
+  // 得到所有的 value
   while (values) {
     types.emplace_back(values->type_);
     if (values->val_)
@@ -811,6 +843,7 @@ dberr_t ExecuteEngine::ExecuteInsert(pSyntaxNode ast, ExecuteContext *context) {
     printf("Invalid number of values.\n");
     return DB_FAILED;
   }
+  // 判断所有的列名并储存 unique 的列用于索引判断
   vector<int> unique_col_idx;
   vector<string> unique_col;
   auto column = schema->GetColumns();
@@ -828,6 +861,7 @@ dberr_t ExecuteEngine::ExecuteInsert(pSyntaxNode ast, ExecuteContext *context) {
   }
   auto table_heap = table_info->GetTableHeap();
 
+  // 依据 column 信息和构建新的 row
   vector<Field> fields;
   for (uint32_t i = 0; i < schema->GetColumnCount(); i++) {
     char* value = (char*)malloc(schema->GetColumn(i)->GetLength()+1);
@@ -868,7 +902,7 @@ dberr_t ExecuteEngine::ExecuteInsert(pSyntaxNode ast, ExecuteContext *context) {
       }
     }
 #else
-    // index traverse
+    // index traverse 用于查重
     for (auto & i : unique_col) {
       bool flag = false;
       for (auto &index : indexes) {
@@ -922,6 +956,7 @@ dberr_t ExecuteEngine::ExecuteDelete(pSyntaxNode ast, ExecuteContext *context) {
     printf("Table %s not found.\n", table_name.c_str());
     return DB_TABLE_NOT_EXIST;
   }
+
   vector<IndexInfo*> indexes;
   db->catalog_mgr_->GetTableIndexes(table_name, indexes);
   if (ast->child_->next_) {  // have where clause
@@ -931,6 +966,7 @@ dberr_t ExecuteEngine::ExecuteDelete(pSyntaxNode ast, ExecuteContext *context) {
       conditions.emplace_front(where);
       where = where->child_;
     }
+    // 同搜索一样的代码和思路
     while (!conditions.empty()) {
       auto condition = conditions.front();
       conditions.pop_front();
@@ -968,12 +1004,14 @@ dberr_t ExecuteEngine::ExecuteDelete(pSyntaxNode ast, ExecuteContext *context) {
   ans.sort();
   ans.unique();
   int row_count = 0;
-  if (!ast->child_->next_) {
+  if (!ast->child_->next_) {  // 遍历全局
+    // 删除 rows
     for (auto iter = table_info->GetTableHeap()->Begin(nullptr);
          iter != table_info->GetTableHeap()->End(); ++iter) {
       row_count++;
       auto r = new Row(iter->GetRowId());
       table_info->GetTableHeap()->GetTuple(r, nullptr);
+      // 删除对应的 index entry
       for (auto& index : indexes) {
         vector<Field> index_fields;
         for (auto& i : index->GetKeyMapping()) {
@@ -984,6 +1022,7 @@ dberr_t ExecuteEngine::ExecuteDelete(pSyntaxNode ast, ExecuteContext *context) {
       table_info->GetTableHeap()->ApplyDelete(iter->GetRowId(), nullptr);
     }
   } else {
+    // 思路同上
     for (auto& i : ans) {
       row_count++;
       auto r = new Row(i);
@@ -998,6 +1037,7 @@ dberr_t ExecuteEngine::ExecuteDelete(pSyntaxNode ast, ExecuteContext *context) {
       table_info->GetTableHeap()->ApplyDelete(i, nullptr);
     }
   }
+  // 重新构建维护的 table pages 优先队列
   table_info->GetTableHeap()->RecreateQueue();
   clock_t end = clock();
   printf("%d rows deleted in %lf s.\n", row_count, (double)(end - start) / CLOCKS_PER_SEC);
@@ -1035,7 +1075,7 @@ dberr_t ExecuteEngine::ExecuteUpdate(pSyntaxNode ast, ExecuteContext *context) {
     value_map[index] = values_table->child_->next_->val_;
     values_table = values_table->next_;
   }
-
+  // 思路同搜索
   if (ast->child_->next_->next_) {  // have where clause
     vector<IndexInfo*> indexes;
     db->catalog_mgr_->GetTableIndexes(table_name, indexes);
@@ -1083,8 +1123,9 @@ dberr_t ExecuteEngine::ExecuteUpdate(pSyntaxNode ast, ExecuteContext *context) {
   ans.unique();
   int row_count = 0;
   // unique update fail
+  // 对于 unique 的列，倘若有多个结果则直接返回失败
   if (!ast->child_->next_->next_ || ans.size() > 1) {
-    for (auto i : value_map) {
+    for (const auto& i : value_map) {
       if (table_info->GetSchema()->GetColumn(i.first)->IsUnique()) {
         printf("Cannot update unique column %s.\n", table_info->GetSchema()->GetColumn(i.first)->GetName().c_str());
         return DB_FAILED;
@@ -1098,6 +1139,7 @@ dberr_t ExecuteEngine::ExecuteUpdate(pSyntaxNode ast, ExecuteContext *context) {
       row_count++;
       vector<Field> fields;
       for (uint32_t i = 0; i < table_info->GetSchema()->GetColumnCount(); ++i) {
+        // 创建对应的 fields 更新
         if (value_map.find(i) != value_map.end()) {
           if (table_info->GetSchema()->GetColumn(i)->GetType() == kTypeInt) {
             fields.emplace_back(Field(kTypeInt, stoi(value_map[i])));
@@ -1121,6 +1163,7 @@ dberr_t ExecuteEngine::ExecuteUpdate(pSyntaxNode ast, ExecuteContext *context) {
       auto iter = new Row(r_id);
       table_info->GetTableHeap()->GetTuple(iter, nullptr);
       if (ans.size() == 1) {
+        // 对于 index 先删除原先的 entry
         for (auto &index : indexes) {
           auto key_map = index->GetKeyMapping();
           vector<Field> index_fields;
@@ -1130,6 +1173,7 @@ dberr_t ExecuteEngine::ExecuteUpdate(pSyntaxNode ast, ExecuteContext *context) {
           index->GetIndex()->RemoveEntry(Row(index_fields), iter->GetRowId(), nullptr);
         }
       }
+      // 创建对应的 fields 更新
       vector<Field> fields;
       for (uint32_t i = 0; i < table_info->GetSchema()->GetColumnCount(); ++i) {
         if (value_map.find(i) != value_map.end()) {
@@ -1149,6 +1193,7 @@ dberr_t ExecuteEngine::ExecuteUpdate(pSyntaxNode ast, ExecuteContext *context) {
       new_row->SetRowId(iter->GetRowId());
       table_info->GetTableHeap()->UpdateTuple(*new_row, iter->GetRowId(), nullptr);
       if (ans.size() == 1) {
+        // 更新新的 entry
         for (auto &index : indexes) {
           auto key_map = index->GetKeyMapping();
           vector<Field> index_fields;
@@ -1207,6 +1252,7 @@ dberr_t ExecuteEngine::ExecuteExecfile(pSyntaxNode ast, ExecuteContext *context)
   string cmd;
   int count = 0;
   clock_t start = clock();
+  // 代码同 main 函数中内容
   while (getline(file, line)) {
     if (line.empty()) {
       continue;
