@@ -110,31 +110,31 @@ CatalogManager::~CatalogManager() {
 
 dberr_t CatalogManager::CreateTable(const string &table_name, TableSchema *schema,
                                     Transaction *txn, TableInfo *&table_info) {
-  if (table_names_.find(table_name) != table_names_.end()) {
+  if (table_names_.find(table_name) != table_names_.end()) {    //输入表名已存在
     return DB_TABLE_ALREADY_EXIST;
   }
   page_id_t page_id;
   auto page = buffer_pool_manager_->NewPage(page_id);
   auto heap = new SimpleMemHeap();
   auto table_heap = TableHeap::Create(buffer_pool_manager_, schema, nullptr, log_manager_, lock_manager_, heap);
-  auto table_meta = TableMetadata::Create(catalog_meta_->GetNextTableId(), table_name, table_heap->GetFirstPageId(), schema, heap);
-  table_info = TableInfo::Create(heap);
+  auto table_meta = TableMetadata::Create(catalog_meta_->GetNextTableId(), table_name, table_heap->GetFirstPageId(), schema, heap); //分配表的空间
+  table_info = TableInfo::Create(heap); //通过堆维护表的相关信息
   table_info->Init(table_meta, table_heap);
   table_names_.insert(std::make_pair(table_name, table_meta->GetTableId()));
-  tables_.insert(std::make_pair(table_meta->GetTableId(), table_info));
+  tables_.insert(std::make_pair(table_meta->GetTableId(), table_info)); //对表的各个属性进行设置
   catalog_meta_->GetTableMetaPages()->insert(std::make_pair(table_meta->GetTableId(), page_id));
   page->WLatch();
-  table_meta->SerializeTo(page->GetData());
+  table_meta->SerializeTo(page->GetData()); //序列化
   page->WUnlatch();
-  buffer_pool_manager_->UnpinPage(page_id, true);
-  return DB_SUCCESS;
+  buffer_pool_manager_->UnpinPage(page_id, true);   
+  return DB_SUCCESS;    //成功建表
 }
 
 dberr_t CatalogManager::GetTable(const string &table_name, TableInfo *&table_info) {
- if (table_names_.find(table_name) == table_names_.end()) {
+ if (table_names_.find(table_name) == table_names_.end()) { //表不存在
     return DB_TABLE_NOT_EXIST;
   }
-  table_info = tables_[table_names_[table_name]];
+  table_info = tables_[table_names_[table_name]];   //存在时返回即可
   return DB_SUCCESS;
 }
 
