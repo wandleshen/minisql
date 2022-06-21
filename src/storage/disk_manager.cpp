@@ -43,10 +43,10 @@ void DiskManager::WritePage(page_id_t logical_page_id, const char *page_data) {
 
 static constexpr size_t N = DiskManager::BITMAP_SIZE;
 
-page_id_t DiskManager::AllocatePage() {
+page_id_t DiskManager::AllocatePage() {		// 从磁盘中分配一个空闲页，并返回空闲页的逻辑页号
   for (size_t i = 1; i < MAX_VALID_PAGE_ID - N; i+=N+1) {
-    ReadPhysicalPage(i, meta_data_);
-    BitmapPage<PAGE_SIZE>* bitmap = reinterpret_cast<BitmapPage<PAGE_SIZE>*>(meta_data_);
+    ReadPhysicalPage(i, meta_data_);	// 从物理页读出meta_data_信息
+    BitmapPage<PAGE_SIZE>* bitmap = reinterpret_cast<BitmapPage<PAGE_SIZE>*>(meta_data_);//更新位图
     uint32_t offset;
     if (bitmap->AllocatePage(offset)) {
       WritePhysicalPage(i, meta_data_);
@@ -61,10 +61,10 @@ page_id_t DiskManager::AllocatePage() {
       return i / (N + 1) * N + offset;
     }
   }
-  return INVALID_PAGE_ID;
+  return INVALID_PAGE_ID;	// 返回空闲页的逻辑页号
 }
 
-void DiskManager::DeAllocatePage(page_id_t logical_page_id) {
+void DiskManager::DeAllocatePage(page_id_t logical_page_id) { 	//释放磁盘中逻辑页号对应的物理页
   if (IsPageFree(logical_page_id) || MapPageId(logical_page_id) > MAX_VALID_PAGE_ID)
     return;
   for (size_t i = 0; i < PAGE_SIZE; i++) {
@@ -77,8 +77,8 @@ void DiskManager::DeAllocatePage(page_id_t logical_page_id) {
   BitmapPage<PAGE_SIZE>* bitmap = reinterpret_cast<BitmapPage<PAGE_SIZE>*>(meta_data_);
   bitmap->DeAllocatePage(MapPageId(logical_page_id)-bitmap_page_id-1);
   WritePhysicalPage(bitmap_page_id, meta_data_);
-  bool isNew = bitmap->get_page_allocated() == 0;
-  ReadPhysicalPage(0, meta_data_);
+  bool isNew = bitmap->get_page_allocated() == 0;	// isnew判断该页是否空闲
+  ReadPhysicalPage(0, meta_data_);	// 读取meta_data_
   DiskFileMetaPage* meta_page = reinterpret_cast<DiskFileMetaPage*>(meta_data_);
   meta_page->num_allocated_pages_--;
   meta_page->extent_used_page_[bitmap_page_id/N]--;
@@ -87,7 +87,7 @@ void DiskManager::DeAllocatePage(page_id_t logical_page_id) {
   WritePhysicalPage(0, meta_data_);
 }
 
-bool DiskManager::IsPageFree(page_id_t logical_page_id) {
+bool DiskManager::IsPageFree(page_id_t logical_page_id) {	// 判断该逻辑页号对应的数据页是否空闲
   page_id_t bitmap_page_id = logical_page_id / N * (N+1) + 1;
   ReadPhysicalPage(bitmap_page_id, meta_data_);
   BitmapPage<PAGE_SIZE>* bitmap = reinterpret_cast<BitmapPage<PAGE_SIZE>*>(meta_data_);
