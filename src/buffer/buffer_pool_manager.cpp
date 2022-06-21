@@ -103,7 +103,7 @@ bool BufferPoolManager::DeletePage(page_id_t page_id) {
   return true;
 }
 
-bool BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty) {
+bool BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty) {   //取消固定一个数据页
   lock_guard<recursive_mutex> lock_guard(latch_);
   if (page_table_.find(page_id) == page_table_.end())
     return false;
@@ -118,7 +118,7 @@ bool BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty) {
   return true;
 }
 
-bool BufferPoolManager::FlushPage(page_id_t page_id) {
+bool BufferPoolManager::FlushPage(page_id_t page_id) {  //将数据页转储到磁盘中
   lock_guard<recursive_mutex> lock_guard(latch_);
   if (page_id == INVALID_PAGE_ID)
     return false;
